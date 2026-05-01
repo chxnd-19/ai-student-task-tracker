@@ -7,13 +7,15 @@ import axios from 'axios';
  * Base URL follows the same rule as api.js:
  *   - Dev:  empty → Vite proxy handles /api/*
  *   - Prod: VITE_API_URL env var, or same-origin fallback
+ *
+ * 🚨 CRITICAL: All API calls MUST use relative '/api' routing via Nginx.
  */
 const authAxios = axios.create({
-  baseURL: import.meta.env.VITE_API_URL || '',
+  baseURL: import.meta.env.VITE_API_URL || '/api',
   timeout: 10_000,
 });
 
-const BASE_URL = '/api/auth';
+const BASE_URL = '/auth';
 
 export const signup = (data) => authAxios.post(`${BASE_URL}/signup`, data);
 export const login  = (data) => authAxios.post(`${BASE_URL}/login`,  data);

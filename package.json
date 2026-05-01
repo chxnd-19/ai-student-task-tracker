@@ -1,0 +1,19 @@
+{
+  "name": "student-task-tracker",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "prepare": "husky",
+    "validate:api": "npm run validate:api --prefix frontend",
+    "release-check": "npm run validate:api"
+  },
+  "lint-staged": {
+    "frontend/src/**/*.{js,jsx}": [
+      "node frontend/scripts/validate-api.js"
+    ]
+  },
+  "devDependencies": {
+    "husky": "^9.0.11",
+    "lint-staged": "^15.2.2"
+  }
+}

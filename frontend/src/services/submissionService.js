@@ -1,6 +1,6 @@
 import api from './api';
 
-const BASE = '/api/submissions';
+const BASE = '/submissions';
 
 /**
  * submitTask — student submits text or PDF file.

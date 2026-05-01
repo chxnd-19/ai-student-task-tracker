@@ -2,26 +2,37 @@ import axios from 'axios';
 import { getToken, removeToken } from './authService';
 
 /**
- * Shared axios instance used by all task service calls.
+ * 🛰️ API COMMUNICATION CONTRACT
+ * ----------------------------
+ * This instance enforces a strict same-origin relative routing policy:
  *
- * Base URL:
- *   - In development: empty string → Vite proxy forwards /api/* to localhost:5000
- *   - In production:  VITE_API_URL env var (e.g. https://your-backend.onrender.com)
- *     If VITE_API_URL is not set, falls back to same-origin (works when frontend
- *     and backend are served from the same domain).
+ * FLOW:  Frontend (baseURL: /api) → Nginx (location /api/) → FastAPI (prefix: /api)
  *
- * Features:
- *   - 10 s request timeout with a friendly error message
- *   - Automatic JWT injection via request interceptor
- *   - 401 response interceptor: removes token + redirects to /login?reason=…
- *     with two guards:
- *       1. Skip redirect if already on /login or /signup (loop prevention)
- *       2. Debounce: only one redirect per 2 s window (duplicate 401 guard)
+ * RULES:
+ *  1. NEVER use hardcoded URLs (localhost:8000, etc.)
+ *  2. NEVER include '/api' in service paths (it's handled by baseURL)
+ *  3. ALWAYS use this instance for authenticated requests.
+ *
+ * 🚨 CRITICAL: Do not break this contract. It ensures the system works
+ * identically in Local Docker and Production without config changes.
  */
 const api = axios.create({
-  baseURL: import.meta.env.VITE_API_URL || '',
+  baseURL: import.meta.env.VITE_API_URL || '/api',
   timeout: 10_000,
 });
+
+// ── Development Guard — Catch duplicate prefixes ──────────────────────────────
+if (import.meta.env.DEV) {
+  api.interceptors.request.use((config) => {
+    if (config.url?.startsWith('/api')) {
+      console.warn(
+        `[API CONTRACT VIOLATION] Endpoint '${config.url}' includes redundant '/api' prefix. ` +
+        `This will result in '/api/api/...' which may fail. Remove '/api' from the service file.`
+      );
+    }
+    return config;
+  });
+}
 
 // ── Request interceptor — attach JWT ─────────────────────────────────────────
 api.interceptors.request.use((config) => {

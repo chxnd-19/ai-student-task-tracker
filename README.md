@@ -1,295 +1,179 @@
-# 📚 Student Task Tracker
+# 🎓 Student Task Tracker
 
-A full-stack MERN application for managing student tasks with user authentication.
-Each user can create, view, edit, complete, and delete their own tasks — no one else can see them.
+[![Python](https://img.shields.io/badge/Python-3.11-blue.svg)](https://www.python.org/)
+[![FastAPI](https://img.shields.io/badge/FastAPI-0.111-009688.svg)](https://fastapi.tiangolo.com/)
+[![React](https://img.shields.io/badge/React-18.3-61DAFB.svg)](https://reactjs.org/)
+[![Docker](https://img.shields.io/badge/Docker-Enabled-2496ED.svg)](https://www.docker.com/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
----
-
-## Features
-
-- JWT-based signup and login
-- Protected routes — dashboard only accessible when logged in
-- Create tasks with title, subject, deadline, status, and description
-- Edit tasks via a modal dialog
-- Mark tasks as completed (or undo)
-- Delete tasks with confirmation
-- Filter tasks by status and subject (persisted across reloads)
-- Overdue task highlighting
-- Pagination with next/prev controls
-- Stats bar showing live task counts
-- Optimistic UI updates with rollback on failure
-- Toast notifications for all actions
-- Input validation with per-field error messages
-- Auto-logout on expired token
+A premium, production-grade SaaS dashboard for managing student assignments, automated submissions, and class-level analytics. Built with a focus on **security**, **observability**, and **performance**.
 
 ---
 
-## Tech Stack
+## 🏛️ Architecture Overview
 
-| Layer     | Technology                          |
-|-----------|-------------------------------------|
-| Frontend  | React 18, Vite, React Router v6     |
-| Backend   | Node.js, Express, Helmet, Rate Limit|
-| Database  | MongoDB Atlas, Mongoose             |
-| Auth      | JWT (jsonwebtoken), bcryptjs        |
-| HTTP      | Axios (with interceptors)           |
-| Styling   | Plain CSS (no UI library)           |
-| Deploy    | Render (backend) + Vercel (frontend)|
+The system follows a modern microservices-lite architecture designed for scalability and clean separation of concerns:
+
+```text
+[ Client ] <---> [ Nginx Reverse Proxy ]
+                        |
+        +---------------+---------------+
+        |               |               |
+ [ React SPA ]   [ FastAPI App ]  [ Flask Service ]
+ (Frontend)      (Primary API)    (ML Analytics)
+        |               |               |
+        +---------------+---------------+
+                        |
+                [ MongoDB Database ]
+```
 
 ---
 
-## Folder Structure
+## ✨ Key Features
+
+- **🚀 Modern SaaS UI**: Premium dark-mode interface with glassmorphism and Framer Motion spring animations.
+- **🛡️ Hardened Security**: Environment-aware rate limiting, JWT authentication, and proxy-aware IP detection.
+- **📊 Real-time Analytics**: Specialized Flask microservice for calculating student performance and class trends.
+- **🕵️ Observability**: Full Prometheus & Grafana stack with custom invariant self-verification and anomaly detection.
+- **📂 File Management**: Robust assignment submission system with automated file storage and status tracking.
+- **🔔 Notification System**: Integrated event-based notifications for deadlines, grades, and class updates.
+
+---
+
+## 📂 Project Structure
 
 ```
 student-task-tracker/
-├── backend/
-│   ├── config/
-│   │   ├── constants.js          # Centralised limits & JWT expiry
-│   │   └── db.js                 # MongoDB connection
-│   ├── controllers/
-│   │   ├── authController.js     # signup, login
-│   │   └── taskController.js     # CRUD (scoped per user)
-│   ├── middleware/
-│   │   ├── authMiddleware.js     # JWT verification
-│   │   └── errorHandler.js      # Global error handler
-│   ├── models/
-│   │   ├── User.js               # User schema + bcrypt hooks
-│   │   └── Task.js               # Task schema + indexes
-│   ├── routes/
-│   │   ├── authRoutes.js
-│   │   └── taskRoutes.js
-│   ├── .env                      # Local dev only (git-ignored)
-│   ├── .env.example              # Template — safe to commit
-│   ├── package.json
-│   └── server.js
-│
-└── frontend/
-    ├── src/
-    │   ├── components/
-    │   │   ├── AddTask.jsx
-    │   │   ├── EditModal.jsx
-    │   │   ├── Navbar.jsx
-    │   │   ├── Spinner.jsx
-    │   │   ├── TaskCard.jsx
-    │   │   └── Toast.jsx
-    │   ├── pages/
-    │   │   ├── Home.jsx           # Dashboard
-    │   │   ├── Login.jsx
-    │   │   ├── Signup.jsx
-    │   │   └── TaskDetail.jsx     # Redirect fallback
-    │   ├── services/
-    │   │   ├── api.js             # Axios instance + interceptors
-    │   │   ├── authService.js     # Auth API calls + token helpers
-    │   │   └── taskService.js     # Task API calls
-    │   ├── App.jsx
-    │   ├── index.css
-    │   └── main.jsx
-    ├── .env.development           # VITE_API_URL= (empty, uses proxy)
-    ├── .env.production            # VITE_API_URL=<render-url> placeholder
-    ├── .env.example               # Template — safe to commit
-    ├── vercel.json                # SPA routing rewrite
-    ├── index.html
-    ├── package.json
-    └── vite.config.js
+├── frontend/               # React + Vite (TailwindCSS, Framer Motion)
+├── backend/                # FastAPI — Primary Backend Service
+│   ├── app/                # Core application logic
+│   ├── Dockerfile          # Optimized multi-stage build
+│   └── .env.example        # Configuration template
+├── flask_service/          # Flask — Analytics & Notifications Microservice
+├── monitoring/             # Prometheus configuration
+├── nginx/                  # Nginx — Reverse Proxy & Static Assets
+└── docker-compose.yml      # Full-stack orchestration
 ```
 
 ---
 
-## Local Development
+## 🚀 Quick Start (Docker)
 
-### Prerequisites
-- Node.js v18+
-- MongoDB running locally **or** a MongoDB Atlas URI
-
-### 1. Clone
+The entire stack can be launched in production mode with a single command:
 
 ```bash
-git clone <your-repo-url>
+# 1. Clone the repository
+git clone https://github.com/yourusername/student-task-tracker.git
 cd student-task-tracker
+
+# 2. Start the services
+docker-compose up --build
 ```
 
-### 2. Backend setup
+### Accessing the Services
+- **Frontend**: [http://localhost](http://localhost)
+- **API Documentation**: [http://localhost/docs](http://localhost/docs)
+- **Prometheus UI**: [http://localhost:9090](http://localhost:9090)
+- **Grafana Dashboards**: [http://localhost:3001](http://localhost:3001) (`admin` / `admin`)
 
+---
+
+## 🛰️ API Routing Rules (The Contract)
+
+To ensure consistency across Docker and Production environments, the system follows a strict **Same-Origin Policy** via Nginx:
+
+1.  **Frontend Calls**: All requests must use the relative `/api` prefix (handled automatically by `services/api.js`).
+2.  **No Hardcoded URLs**: Never use `localhost:8000`, `127.0.0.1`, or `http://` in frontend services.
+3.  **Routing Path**: `Frontend (/api) ──> Nginx (/api) ──> Backend (/api)`.
+4.  **Why?**: This prevents CORS issues, simplifies environment configuration, and makes the system fully portable.
+
+---
+
+## 🛡️ API Contract Enforcement
+
+The communication rules are automatically enforced via a static analysis script. Violations (like hardcoded URLs or direct HTTP calls) will fail the validation check.
+
+### Run Validation Locally
+```bash
+cd frontend
+npm run validate:api
+```
+
+---
+
+## 🛡️ Pre-Commit Validation
+
+To prevent architectural regressions, an automated git hook runs before every commit. This hook executes the API contract validator and will **block the commit** if any violations are found.
+
+- **Emergency Bypass**: Use `git commit -m "..." --no-verify` (Only for emergency use).
+- **Rule**: Never bypass this check to fix a "broken build"; fix the underlying API routing instead.
+
+---
+
+## ❓ If Your Commit is Blocked
+
+The pre-commit hook is designed to protect the system's architecture. If your commit is blocked:
+
+1.  **Check the Output**: The terminal will show the exact file and line causing the violation.
+2.  **Fix the Issue**: Most common fixes:
+    *   Remove `/api` from your service file (it's already handled by `baseURL`).
+    *   Move any direct `axios` or `fetch` calls into `services/api.js`.
+    *   Remove hardcoded URLs like `localhost:8000`.
+3.  **Retry**: Once fixed, `git add` the changes and try the commit again.
+
+---
+
+## 🔖 Versioning Strategy
+
+This project follows [Semantic Versioning (SemVer)](https://semver.org/):
+- **MAJOR**: Breaking changes or structural architectural shifts.
+- **MINOR**: New features or significant functional additions.
+- **PATCH**: Bug fixes, security hardening, or documentation updates.
+
+**Release Flow**:
+1.  Complete work and update `CHANGELOG.md`.
+2.  Pass the **[Release Checklist](RELEASE_CHECKLIST.md)**.
+3.  Tag the release: `git tag -a v1.0.0 -m "Release description"`.
+
+---
+
+## 🛠️ Developer Setup (Manual)
+
+### Backend (FastAPI)
 ```bash
 cd backend
-cp .env.example .env   # then edit .env with your values
-npm install
-npm run dev            # runs on http://localhost:5000
+python -m venv venv
+source venv/bin/activate  # venv\Scripts\activate on Windows
+pip install -r requirements.txt
+python run.py
 ```
 
-### 3. Frontend setup
-
+### Frontend (React)
 ```bash
 cd frontend
 npm install
-npm run dev            # runs on http://localhost:3000
+npm run dev
 ```
 
-> Vite proxies all `/api/*` requests to `localhost:5000` automatically — no CORS config needed locally.
+---
+
+## 📈 Monitoring & Health
+
+The system continuously monitors its own integrity via custom invariant checks:
+- **Health Probe**: `GET /api/health` returns status, DB connectivity, and environment validation.
+- **Deep Self-Check**: `GET /api/system/self-check` verifies internal state (Teacher only).
+- **Metrics**: Production metrics are exported to Prometheus at `/metrics`.
 
 ---
 
-## API Endpoints
+## 🗺️ Roadmap
 
-### Auth
-| Method | Endpoint         | Description       |
-|--------|------------------|-------------------|
-| POST   | /api/auth/signup | Register new user |
-| POST   | /api/auth/login  | Login, get token  |
-
-### Tasks — require `Authorization: Bearer <token>`
-| Method | Endpoint       | Description                        |
-|--------|----------------|------------------------------------|
-| GET    | /api/tasks     | Get tasks (paginated, filterable)  |
-| POST   | /api/tasks     | Create task                        |
-| PUT    | /api/tasks/:id | Update task                        |
-| DELETE | /api/tasks/:id | Delete task                        |
-
-### Other
-| Method | Endpoint    | Description  |
-|--------|-------------|--------------|
-| GET    | /api/health | Health check |
+- [ ] **Real-time Collaboration**: Live chat and shared document editing using WebSockets.
+- [ ] **AI Grading**: Integration with LLMs for automated feedback on submissions.
+- [ ] **Mobile App**: Dedicated React Native application for student reminders.
 
 ---
 
-## Deployment
+## ⚖️ License
 
-### Step 1 — Create a MongoDB Atlas Cluster
-
-1. Go to [mongodb.com/atlas](https://www.mongodb.com/atlas) and create a free account
-2. Click **Build a Database** → choose **M0 Free Tier** → pick a region close to your Render server
-3. Create a database user:
-   - **Database Access** → **Add New Database User**
-   - Username: `tasktracker-user` (or any name)
-   - Password: click **Autogenerate Secure Password** — copy it now
-   - Role: **Read and write to any database**
-4. Allow network access:
-   - **Network Access** → **Add IP Address** → **Allow Access from Anywhere** (`0.0.0.0/0`)
-   - This is required for Render's dynamic IPs
-5. Get your connection string:
-   - **Database** → **Connect** → **Drivers**
-   - Copy the URI — it looks like:
-     ```
-     mongodb+srv://tasktracker-user:<password>@cluster0.xxxxx.mongodb.net/?retryWrites=true&w=majority
-     ```
-   - Replace `<password>` with the password you copied in step 3
-   - Add your database name before the `?`:
-     ```
-     mongodb+srv://tasktracker-user:<password>@cluster0.xxxxx.mongodb.net/student-task-tracker?retryWrites=true&w=majority
-     ```
-
----
-
-### Step 2 — Deploy Backend to Render
-
-1. Push your project to GitHub (the whole `student-task-tracker/` folder or a monorepo)
-2. Go to [render.com](https://render.com) → **New** → **Web Service**
-3. Connect your GitHub repo
-4. Configure the service:
-
-   | Setting        | Value            |
-   |----------------|------------------|
-   | Name           | `student-task-tracker-api` |
-   | Root Directory | `backend`        |
-   | Runtime        | Node             |
-   | Build Command  | `npm install`    |
-   | Start Command  | `node server.js` |
-
-5. Under **Environment Variables**, add:
-
-   | Key            | Value                                      |
-   |----------------|--------------------------------------------|
-   | `MONGO_URI`    | Your Atlas connection string from Step 1   |
-   | `JWT_SECRET`   | A long random string (see tip below)       |
-   | `FRONTEND_URL` | Leave blank for now — fill in after Step 3 |
-   | `NODE_ENV`     | `production`                               |
-
-   > **Tip — generate a strong JWT_SECRET:**
-   > ```bash
-   > node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
-   > ```
-
-6. Click **Create Web Service** — Render will build and deploy
-7. Copy your Render URL: `https://student-task-tracker-api.onrender.com`
-8. Go back to **Environment Variables** and set:
-   - `FRONTEND_URL` = your Vercel URL (you'll get this in Step 3 — come back and update it)
-
----
-
-### Step 3 — Deploy Frontend to Vercel
-
-1. Go to [vercel.com](https://vercel.com) → **Add New Project**
-2. Import your GitHub repo
-3. Configure the project:
-
-   | Setting        | Value           |
-   |----------------|-----------------|
-   | Framework      | Vite            |
-   | Root Directory | `frontend`      |
-   | Build Command  | `npm run build` |
-   | Output Dir     | `dist`          |
-
-4. Under **Environment Variables**, add:
-
-   | Key            | Value                                          |
-   |----------------|------------------------------------------------|
-   | `VITE_API_URL` | Your Render URL from Step 2 (e.g. `https://student-task-tracker-api.onrender.com`) |
-
-5. Click **Deploy**
-6. Copy your Vercel URL: `https://student-task-tracker.vercel.app`
-7. Go back to Render → **Environment Variables** → update `FRONTEND_URL` with this Vercel URL
-8. Trigger a **Manual Deploy** on Render so the new CORS origin takes effect
-
-> The included `vercel.json` rewrites all routes to `index.html` so React Router works on direct URL access and page refresh.
-
----
-
-### Step 4 — Final Verification Checklist
-
-- [ ] `MONGO_URI` points to Atlas (not `localhost`)
-- [ ] `JWT_SECRET` is a long random string (not the placeholder)
-- [ ] `FRONTEND_URL` on Render = exact Vercel URL (no trailing slash)
-- [ ] `VITE_API_URL` on Vercel = exact Render URL (no trailing slash)
-- [ ] `NODE_ENV=production` set on Render
-- [ ] Visit `https://your-backend.onrender.com/api/health` → should return `{"success":true}`
-- [ ] Test full flow: **Signup → Login → Add task → Edit → Complete → Delete → Logout → Expired token redirect**
-
----
-
-## Environment Variables Reference
-
-### Backend (`backend/.env`)
-
-| Variable       | Required | Description                              |
-|----------------|----------|------------------------------------------|
-| `MONGO_URI`    | Yes      | MongoDB Atlas connection string          |
-| `JWT_SECRET`   | Yes      | Secret for signing JWT tokens            |
-| `FRONTEND_URL` | Yes (prod)| Vercel frontend URL for CORS             |
-| `NODE_ENV`     | No       | `development` or `production`            |
-| `PORT`         | No       | Defaults to 5000; Render sets this auto  |
-
-### Frontend (`frontend/.env.production`)
-
-| Variable       | Required | Description                              |
-|----------------|----------|------------------------------------------|
-| `VITE_API_URL` | Yes (prod)| Render backend URL (empty in dev)        |
-
----
-
-## Screenshots
-
-> _Add screenshots here after running the project._
-
-| Page      | Screenshot |
-|-----------|------------|
-| Login     | ![Login](#) |
-| Signup    | ![Signup](#) |
-| Dashboard | ![Dashboard](#) |
-| Add Task  | ![Add Task](#) |
-| Edit Task | ![Edit Modal](#) |
-
----
-
-## License
-
-MIT
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.

@@ -1,0 +1,18 @@
+# Node
+node_modules/
+npm-debug.log*
+
+# Build output — rebuilt inside Docker
+dist/
+
+# Local env files
+.env
+.env.local
+.env.development
+.env.production
+
+# Editor / OS
+.DS_Store
+.idea/
+.vscode/
+*.swp

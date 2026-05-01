@@ -1,6 +1,6 @@
 import api from './api';
 
-const BASE = '/api/tasks';
+const BASE = '/tasks';
 
 export const fetchTasks    = (params = {}, signal) =>
   api.get(BASE, { params, signal }).then((r) => ({

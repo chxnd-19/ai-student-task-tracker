@@ -10,7 +10,11 @@ export default defineConfig({
     // In production this is not used — VITE_API_URL handles routing.
     proxy: {
       '/api': {
-        target: 'http://localhost:5000',
+        target: 'http://localhost:8000',
+        changeOrigin: true,
+      },
+      '/uploads': {
+        target: 'http://localhost:8000',
         changeOrigin: true,
       },
     },
