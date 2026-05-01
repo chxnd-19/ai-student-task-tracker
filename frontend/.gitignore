@@ -1,0 +1,10 @@
+node_modules/
+dist/
+
+# Local overrides — never commit real secrets
+.env
+.env.local
+.env.*.local
+
+# .env.development and .env.production contain only placeholders
+# and are safe to commit. Real values go in the hosting dashboard.
