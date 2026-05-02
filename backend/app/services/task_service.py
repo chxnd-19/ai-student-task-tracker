@@ -75,7 +75,7 @@ async def get_tasks(user: dict, db: AsyncIOMotorDatabase, query_params: dict) ->
                 {"_id": ObjectId(str(task["createdBy"]))}, {"name": 1, "email": 1}
             )
             if u:
-                task["createdBy"] = {"id": str(u["_id"]), "name": u["name"], "email": u["email"]}
+                task["createdBy"] = {"_id": str(u["_id"]), "name": u["name"], "email": u["email"]}
 
     return {
         "data": tasks,

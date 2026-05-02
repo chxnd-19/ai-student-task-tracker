@@ -4,6 +4,7 @@ import { motion } from 'framer-motion';
 import { login, saveToken } from '../services/authService';
 import Spinner from '../components/Spinner';
 import GlassCard from '../components/GlassCard';
+import { parseError } from '../utils/errorParser';
 
 import Button from '../components/Button';
 
@@ -39,7 +40,7 @@ function TeacherLogin({ onLogin }) {
       window.scrollTo(0, 0);
       navigate('/');
     } catch (err) {
-      setError(err.response?.data?.message || 'Login failed. Please check your credentials.');
+      setError(parseError(err, 'Login failed. Please check your credentials.'));
     } finally {
       setLoading(false);
     }

@@ -3,7 +3,8 @@ import { motion } from 'framer-motion';
 import { fetchTasks } from '../services/taskService';
 import GlassCard from '../components/GlassCard';
 import Spinner from '../components/Spinner';
-import { Calendar, BookOpen, Clock } from 'lucide-react';
+import { Calendar, BookOpen, Clock, Inbox } from 'lucide-react';
+import EmptyState from '../components/EmptyState';
 
 const pageVariants = {
   hidden: { opacity: 0, y: 20 },
@@ -35,9 +36,11 @@ function StudentAssignmentsPage() {
       {loading ? (
         <div className="flex justify-center p-20"><Spinner /></div>
       ) : tasks.length === 0 ? (
-        <GlassCard className="p-12 text-center border-dashed bg-surface/30">
-          <p className="text-muted text-lg">No assignments found across your classes.</p>
-        </GlassCard>
+        <EmptyState 
+          icon={Inbox}
+          title="No Assignments Yet"
+          description="Your instructors haven't posted any assignments for your classes. Enjoy the free time or check back later!"
+        />
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {tasks.map(task => (

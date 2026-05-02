@@ -67,29 +67,29 @@ export function computeTaskSummary(tasks, submissions) {
 export const STATUS_META = {
   [TASK_STATUS.PENDING]: {
     label:   'Pending',
-    color:   '#f59e0b',          // amber
-    bg:      'rgba(245,158,11,0.1)',
+    color:   '#fbbf24',          // Vibrant Amber
+    bg:      'rgba(251, 191, 36, 0.15)',
     cssClass: 'status-pending',
     tooltip: 'Not yet submitted. Deadline has not passed.',
   },
   [TASK_STATUS.SUBMITTED]: {
     label:   'Submitted',
-    color:   '#10b981',          // emerald
-    bg:      'rgba(16,185,129,0.1)',
+    color:   '#34d399',          // Vibrant Emerald
+    bg:      'rgba(52, 211, 153, 0.15)',
     cssClass: 'status-submitted',
     tooltip: 'Submitted on or before the deadline.',
   },
   [TASK_STATUS.OVERDUE]: {
     label:   'Overdue',
-    color:   '#ef4444',          // red
-    bg:      'rgba(239,68,68,0.1)',
+    color:   '#f87171',          // Vibrant Red
+    bg:      'rgba(248, 113, 113, 0.15)',
     cssClass: 'status-overdue',
     tooltip: 'Deadline has passed and no submission was made.',
   },
   [TASK_STATUS.LATE]: {
     label:   'Late',
-    color:   '#f97316',          // orange
-    bg:      'rgba(249,115,22,0.1)',
+    color:   '#fb923c',          // Vibrant Orange
+    bg:      'rgba(251, 146, 60, 0.15)',
     cssClass: 'status-late',
     tooltip: 'Submitted after the deadline.',
   },

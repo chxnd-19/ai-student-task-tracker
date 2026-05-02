@@ -21,6 +21,7 @@ import SubmissionList from '../components/SubmissionList';
 import Spinner from '../components/Spinner';
 import Toast from '../components/Toast';
 import GlassCard from '../components/GlassCard';
+import EmptyState from '../components/EmptyState';
 
 const emptyTask  = { title: '', subject: '', dueDate: '', description: '', status: 'pending', submissionType: 'text' };
 const emptyClass = { name: '', subject: '', description: '' };
@@ -227,7 +228,7 @@ function TeacherDashboard({ user }) {
       initial="hidden"
       animate="visible"
       variants={containerVariants}
-      className="dashboard-container max-w-[1400px] mx-auto px-8"
+      className="dashboard-container max-w-[1400px] mx-auto px-8 fade-in"
     >
       <Toast message={toast.message} type={toast.type} onClose={() => setToast({ message: '', type: 'success' })} />
 
@@ -258,7 +259,7 @@ function TeacherDashboard({ user }) {
       <motion.div variants={containerVariants} className="grid grid-cols-1 md:grid-cols-3 gap-8 mb-12">
         <motion.div variants={itemVariants}>
           <GlassCard className="flex items-center gap-6 h-full p-8">
-            <div className="w-14 h-14 rounded-2xl bg-indigo-500/10 text-indigo-500 flex items-center justify-center">
+            <div className="w-14 h-14 rounded-2xl bg-indigo-500/10 text-indigo-500 flex items-center justify-center icon-glow">
               <Users size={28} />
             </div>
             <div>
@@ -269,7 +270,7 @@ function TeacherDashboard({ user }) {
         </motion.div>
         <motion.div variants={itemVariants}>
           <GlassCard className="flex items-center gap-6 h-full p-8">
-            <div className="w-14 h-14 rounded-2xl bg-amber-500/10 text-amber-500 flex items-center justify-center">
+            <div className="w-14 h-14 rounded-2xl bg-amber-500/10 text-amber-500 flex items-center justify-center icon-glow">
               <BookOpen size={28} />
             </div>
             <div>
@@ -280,7 +281,7 @@ function TeacherDashboard({ user }) {
         </motion.div>
         <motion.div variants={itemVariants}>
           <GlassCard className="flex items-center gap-6 h-full p-8">
-            <div className="w-14 h-14 rounded-2xl bg-cyan-500/10 text-cyan-500 flex items-center justify-center">
+            <div className="w-14 h-14 rounded-2xl bg-cyan-500/10 text-cyan-500 flex items-center justify-center icon-glow">
               <BarChart3 size={28} />
             </div>
             <div className="flex-1">
@@ -315,8 +316,9 @@ function TeacherDashboard({ user }) {
           
           <div className="space-y-3">
             {classes.length === 0 ? (
-              <GlassCard className="text-center p-8 opacity-60">
-                <p className="text-sm">No classes yet.</p>
+              <GlassCard className="text-center p-8 opacity-60 border-dashed">
+                <p className="text-sm font-medium text-muted">No classes yet.</p>
+                <p className="text-[10px] uppercase tracking-widest mt-2">Create one to begin</p>
               </GlassCard>
             ) : (
               classes.map((cls) => (
@@ -360,14 +362,12 @@ function TeacherDashboard({ user }) {
           {loading ? (
             <div className="flex justify-center p-20"><Spinner text="Loading tasks..." /></div>
           ) : tasks.length === 0 ? (
-            <GlassCard className="text-center py-20 bg-surface/30 border-dashed">
-              <div className="w-16 h-16 rounded-full bg-white/5 flex items-center justify-center mx-auto mb-4">
-                <BookOpen size={32} className="text-muted" />
-              </div>
-              <h3 className="text-xl font-bold mb-2">No assignments yet</h3>
-              <p className="text-muted mb-6">Start by creating your first task for this class.</p>
-              <Button onClick={() => setShowForm(true)}>Create Assignment</Button>
-            </GlassCard>
+            <EmptyState 
+              icon={BookOpen}
+              title="No assignments yet"
+              description="Start by creating your first task for this class. You can set deadlines, add descriptions, and choose submission types."
+              action={<Button onClick={() => setShowForm(true)} className="px-10">Create Assignment</Button>}
+            />
           ) : (
             <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
               {tasks.map((task) => {

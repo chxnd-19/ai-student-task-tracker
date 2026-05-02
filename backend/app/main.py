@@ -20,7 +20,7 @@ import sys
 from contextlib import asynccontextmanager
 from pathlib import Path
 
-from fastapi import FastAPI, Request, status
+from fastapi import FastAPI, Request, status, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
@@ -66,7 +66,7 @@ _REQUIRED = ["MONGO_URI", "JWT_SECRET"]
 _missing  = [k for k in _REQUIRED if not getattr(settings, k, None)]
 if _missing:
     logger.critical(f"Missing required env vars: {', '.join(_missing)}")
-    logger.critical("Copy python-backend/.env.example → .env and fill in values.")
+    logger.critical("Copy backend/.env.example → backend/.env and fill in values.")
     sys.exit(1)
 
 # ── Rate limiter ──────────────────────────────────────────────────────────────
@@ -77,7 +77,7 @@ limiter = auth_limiter
 
 # ── INVARIANT: Limiter Integrity Check ────────────────────────────────────────
 from app.utils.rate_limit import get_real_ip
-if limiter.key_func != get_real_ip:
+if limiter._key_func != get_real_ip:
     logger.error("[INTEGRITY FAILURE] Limiter key_func mismatch! Aborting.")
     sys.exit(1)
 
@@ -142,7 +142,7 @@ async def _perform_self_check() -> dict:
         from app.utils.rate_limit import get_real_ip
         if hasattr(app.state, "limiter"):
             checks["limiter_bound"] = True
-            if app.state.limiter.key_func == get_real_ip:
+            if app.state.limiter._key_func == get_real_ip:
                 checks["key_func_valid"] = True
         
         if settings.is_production or settings.ENVIRONMENT.lower() == "development":

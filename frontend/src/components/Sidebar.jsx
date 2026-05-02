@@ -69,7 +69,7 @@ const Sidebar = ({ user, onLogout }) => {
             key={item.label}
             to={item.path}
             end={item.end}
-            className={({ isActive }) => `nav-item${isActive ? ' active' : ''}`}
+            className={({ isActive }) => `nav-item sidebar-item${isActive ? ' active' : ''}`}
             title={isCollapsed ? item.label : undefined}
           >
             <motion.span 
@@ -93,7 +93,7 @@ const Sidebar = ({ user, onLogout }) => {
 
       <div className="sidebar-footer">
         <button
-          className="logout-btn nav-item"
+          className="logout-btn nav-item sidebar-item"
           onClick={onLogout}
           title={isCollapsed ? 'Logout' : undefined}
         >

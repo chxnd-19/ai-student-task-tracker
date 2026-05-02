@@ -4,6 +4,8 @@ import { motion } from 'framer-motion';
 import { signup, saveToken } from '../services/authService';
 import Spinner from '../components/Spinner';
 import GlassCard from '../components/GlassCard';
+import Toast from '../components/Toast';
+import { parseError } from '../utils/errorParser';
 
 import Button from '../components/Button';
 
@@ -12,6 +14,7 @@ function Signup({ onLogin }) {
   const nameRef  = useRef(null);
   const [form, setForm]       = useState({ name: '', email: '', password: '', role: 'student' });
   const [error, setError]     = useState('');
+  const [success, setSuccess] = useState('');
   const [loading, setLoading] = useState(false);
 
   useEffect(() => { nameRef.current?.focus(); }, []);
@@ -25,12 +28,15 @@ function Signup({ onLogin }) {
     setLoading(true);
     try {
       const { data: res } = await signup(form);
-      saveToken(res.data.token);
-      onLogin(res.data);
-      window.scrollTo(0, 0);
-      navigate('/');
+      setSuccess('Account created successfully! Redirecting...');
+      setTimeout(() => {
+        saveToken(res.data.token);
+        onLogin(res.data);
+        window.scrollTo(0, 0);
+        navigate('/');
+      }, 1500);
     } catch (err) {
-      setError(err.response?.data?.message || 'Signup failed. Please try again.');
+      setError(parseError(err, 'Signup failed. Please try again.'));
     } finally {
       setLoading(false);
     }
@@ -42,6 +48,7 @@ function Signup({ onLogin }) {
       animate={{ opacity: 1, scale: 1 }}
       className="auth-card-v2 max-w-[520px] mx-auto px-6"
     >
+      <Toast message={success} type="success" onClose={() => setSuccess('')} />
       <GlassCard className="p-12">
         <div className="flex flex-col items-center text-center mb-10">
           <div className="w-16 h-16 rounded-2xl bg-primary-gradient flex items-center justify-center text-white mb-6 shadow-lg shadow-primary/20">

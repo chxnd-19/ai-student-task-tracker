@@ -33,8 +33,10 @@ export default function TeacherStudentsPage() {
     const map = {};
     classes.forEach((cls) => {
       (cls.students || []).forEach((s) => {
-        if (!map[s._id]) map[s._id] = { ...s, classes: [] };
-        map[s._id].classes.push(cls.name);
+        const sid = s._id || s.id;
+        if (!sid) return;
+        if (!map[sid]) map[sid] = { ...s, _id: sid, classes: [] };
+        map[sid].classes.push(cls.name);
       });
     });
     return Object.values(map);
@@ -68,7 +70,11 @@ export default function TeacherStudentsPage() {
               <motion.div key={student._id} variants={itemVariants}>
                 <GlassCard
                   className="p-6 flex items-center gap-4 cursor-pointer group hover:border-primary/50 transition-all"
-                  onClick={() => navigate(`/student/${student._id}`)}
+                  onClick={() => {
+                    console.log(student);
+                    if (!student._id) return;
+                    navigate(`/student/${student._id}`);
+                  }}
                 >
                   {/* Avatar */}
                   <div className="w-12 h-12 rounded-2xl bg-primary-gradient flex items-center justify-center text-white font-bold text-lg flex-shrink-0">

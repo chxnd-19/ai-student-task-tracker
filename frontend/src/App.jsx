@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import Navbar from './components/Navbar';
 import Sidebar from './components/Sidebar';
 import TeacherLogin from './pages/TeacherLogin';
@@ -16,7 +16,7 @@ import StudentProfileView from './pages/StudentProfileView';
 import { getToken } from './services/authService';
 
 import GlassCard from './components/GlassCard';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 
 const pageVariants = {
   hidden: { opacity: 0, y: 20 },
@@ -42,6 +42,65 @@ function RoleRoute({ user, roles, children }) {
   if (!user) return <Navigate to="/login/student" replace />;
   if (!roles.includes(user.role)) return <Navigate to="/" replace />;
   return children;
+}
+
+function AppRoutes({ user, handleLogin }) {
+  const location = useLocation();
+
+  return (
+    <AnimatePresence mode="wait">
+      <motion.div
+        key={location.pathname}
+        initial={{ opacity: 0, x: 10 }}
+        animate={{ opacity: 1, x: 0 }}
+        exit={{ opacity: 0, x: -10 }}
+        transition={{ duration: 0.3, ease: 'easeOut' }}
+      >
+        <Routes location={location}>
+          <Route path="/login/teacher" element={<TeacherLogin onLogin={handleLogin} />} />
+          <Route path="/login/student" element={<StudentLogin onLogin={handleLogin} />} />
+          <Route path="/login"         element={<Navigate to="/login/student" replace />} />
+          <Route path="/signup"        element={<Signup onLogin={handleLogin} />} />
+
+          <Route path="/" element={
+            <PrivateRoute user={user}>
+              {user?.role === 'teacher'
+                ? <TeacherDashboard user={user} />
+                : <StudentDashboard user={user} />}
+            </PrivateRoute>
+          } />
+
+          <Route path="/tasks" element={
+            <RoleRoute user={user} roles={['teacher']}><TeacherTasksPage /></RoleRoute>
+          } />
+          <Route path="/students" element={
+            <RoleRoute user={user} roles={['teacher']}><TeacherStudentsPage /></RoleRoute>
+          } />
+
+          <Route path="/student/:id" element={
+            <RoleRoute user={user} roles={['teacher']}><StudentProfileView /></RoleRoute>
+          } />
+
+          <Route path="/assignments" element={
+            <RoleRoute user={user} roles={['student']}><StudentAssignmentsPage /></RoleRoute>
+          } />
+          <Route path="/submissions" element={
+            <RoleRoute user={user} roles={['student']}><StudentSubmissionsPage /></RoleRoute>
+          } />
+
+          <Route path="/calendar" element={
+            <PrivateRoute user={user}><CalendarPage /></PrivateRoute>
+          } />
+
+          <Route path="/profile" element={
+            <PrivateRoute user={user}><ProfilePage user={user} /></PrivateRoute>
+          } />
+
+          <Route path="*" element={<Navigate to="/" replace />} />
+        </Routes>
+      </motion.div>
+    </AnimatePresence>
+  );
 }
 
 function App() {
@@ -74,49 +133,7 @@ function App() {
         <main className={user ? 'main-content' : 'full-content'}>
           {user && <Navbar user={user} onLogout={handleLogout} />}
           <div className={user ? 'py-8' : 'w-full flex items-center justify-center'}>
-            <Routes>
-              <Route path="/login/teacher" element={<TeacherLogin onLogin={handleLogin} />} />
-              <Route path="/login/student" element={<StudentLogin onLogin={handleLogin} />} />
-              <Route path="/login"         element={<Navigate to="/login/student" replace />} />
-              <Route path="/signup"        element={<Signup onLogin={handleLogin} />} />
-
-              <Route path="/" element={
-                <PrivateRoute user={user}>
-                  {user?.role === 'teacher'
-                    ? <TeacherDashboard user={user} />
-                    : <StudentDashboard user={user} />}
-                </PrivateRoute>
-              } />
-
-              <Route path="/tasks" element={
-                <RoleRoute user={user} roles={['teacher']}><TeacherTasksPage /></RoleRoute>
-              } />
-              <Route path="/students" element={
-                <RoleRoute user={user} roles={['teacher']}><TeacherStudentsPage /></RoleRoute>
-              } />
-
-              {/* Teacher: view individual student profile */}
-              <Route path="/student/:id" element={
-                <RoleRoute user={user} roles={['teacher']}><StudentProfileView /></RoleRoute>
-              } />
-
-              <Route path="/assignments" element={
-                <RoleRoute user={user} roles={['student']}><StudentAssignmentsPage /></RoleRoute>
-              } />
-              <Route path="/submissions" element={
-                <RoleRoute user={user} roles={['student']}><StudentSubmissionsPage /></RoleRoute>
-              } />
-
-              <Route path="/calendar" element={
-                <PrivateRoute user={user}><CalendarPage /></PrivateRoute>
-              } />
-
-              <Route path="/profile" element={
-                <PrivateRoute user={user}><ProfilePage user={user} /></PrivateRoute>
-              } />
-
-              <Route path="*" element={<Navigate to="/" replace />} />
-            </Routes>
+            <AppRoutes user={user} handleLogin={handleLogin} />
           </div>
         </main>
       </div>

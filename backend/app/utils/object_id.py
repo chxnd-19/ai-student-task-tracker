@@ -38,15 +38,19 @@ def _convert_value(value: Any) -> Any:
 def serialize_doc(doc: dict | None) -> dict | None:
     """
     Recursively convert a MongoDB document to a JSON-serialisable dict.
-    Renames '_id' → 'id' for frontend compatibility.
+    Provides '_id' as a string and renames '_id' → 'id' for frontend compatibility.
     """
     if doc is None:
         return None
 
     result: dict = {}
     for key, value in doc.items():
-        out_key = "id" if key == "_id" else key
-        result[out_key] = _convert_value(value)
+        if key == "_id":
+            val_str = str(value)
+            result["id"] = val_str
+            result["_id"] = val_str
+        else:
+            result[key] = _convert_value(value)
 
     return result
 

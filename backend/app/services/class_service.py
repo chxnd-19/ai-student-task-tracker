@@ -63,7 +63,7 @@ async def get_my_classes(user: dict, db: AsyncIOMotorDatabase) -> list:
             if is_valid_object_id(str(sid)):
                 u = await db.users.find_one({"_id": ObjectId(str(sid))}, {"name": 1, "email": 1})
                 if u:
-                    populated.append({"id": str(u["_id"]), "name": u["name"], "email": u["email"]})
+                    populated.append({"_id": str(u["_id"]), "name": u["name"], "email": u["email"]})
         cls["students"] = populated
     return classes
 

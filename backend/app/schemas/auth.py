@@ -2,13 +2,13 @@
 Auth request / response schemas.
 """
 from typing import Literal
-from pydantic import BaseModel, EmailStr, field_validator
+from pydantic import BaseModel, EmailStr, Field, field_validator
 
 
 class SignupRequest(BaseModel):
     name: str
     email: EmailStr
-    password: str
+    password: str = Field(..., min_length=6, max_length=72)
     role: Literal["teacher", "student"] = "student"
 
     @field_validator("name")
@@ -19,12 +19,6 @@ class SignupRequest(BaseModel):
             raise ValueError("Name is required.")
         return v
 
-    @field_validator("password")
-    @classmethod
-    def password_min_length(cls, v: str) -> str:
-        if len(v) < 6:
-            raise ValueError("Password must be at least 6 characters.")
-        return v
 
 
 class LoginRequest(BaseModel):

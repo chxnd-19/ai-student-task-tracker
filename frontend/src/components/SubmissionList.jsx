@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { FileQuestion } from 'lucide-react';
 
 const API_BASE = import.meta.env.VITE_API_URL || '';
 
@@ -10,7 +11,13 @@ function SubmissionList({ submissions }) {
   const [expandedId, setExpandedId] = useState(null);
 
   if (!submissions.length) {
-    return <p className="empty-sub-msg">No submissions yet.</p>;
+    return (
+      <div className="flex flex-col items-center justify-center py-20 opacity-40">
+        <FileQuestion size={48} strokeWidth={1} className="mb-4" />
+        <p className="font-bold">No submissions yet</p>
+        <p className="text-xs">When students submit their work, it will appear here.</p>
+      </div>
+    );
   }
 
   return (

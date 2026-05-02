@@ -3,7 +3,8 @@ import { motion } from 'framer-motion';
 import { fetchMySubmissions } from '../services/submissionService';
 import GlassCard from '../components/GlassCard';
 import Spinner from '../components/Spinner';
-import { FileText, CheckCircle2, Clock } from 'lucide-react';
+import { FileText, CheckCircle2, Clock, UploadCloud } from 'lucide-react';
+import EmptyState from '../components/EmptyState';
 
 const pageVariants = {
   hidden: { opacity: 0, y: 20 },
@@ -35,9 +36,11 @@ function StudentSubmissionsPage() {
       {loading ? (
         <div className="flex justify-center p-20"><Spinner /></div>
       ) : submissions.length === 0 ? (
-        <GlassCard className="p-12 text-center border-dashed bg-surface/30">
-          <p className="text-muted text-lg">You haven't submitted any assignments yet.</p>
-        </GlassCard>
+        <EmptyState 
+          icon={UploadCloud}
+          title="No Submissions Found"
+          description="You haven't uploaded any assignment files yet. When you submit a task, it will appear here with its grading status."
+        />
       ) : (
         <div className="space-y-4">
           {submissions.map(sub => (

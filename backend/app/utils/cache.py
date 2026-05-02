@@ -51,10 +51,11 @@ class TTLCache:
                 return None
             return value
 
-    def set(self, key: str, value: Any) -> None:
+    def set(self, key: str, value: Any, ttl: int | None = None) -> None:
         """Store a value with the configured TTL."""
+        _ttl = ttl if ttl is not None else self._ttl
         with self._lock:
-            self._store[key] = (value, time.monotonic() + self._ttl)
+            self._store[key] = (value, time.monotonic() + _ttl)
 
     def invalidate(self, key: str) -> None:
         """Remove a single entry (e.g. after a mutation)."""

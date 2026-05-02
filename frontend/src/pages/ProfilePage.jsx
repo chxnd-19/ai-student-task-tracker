@@ -89,6 +89,13 @@ function ProfilePage({ user }) {
     e.preventDefault();
     if (saving) return;
     setFormError('');
+
+    // Validation
+    if (!form.name?.trim()) {
+      setFormError('Full Name is required.');
+      return;
+    }
+
     setSaving(true);
     try {
       const { data } = await updateProfile(form);
@@ -160,7 +167,7 @@ function ProfilePage({ user }) {
               </div>
 
               <button
-                className="btn btn-primary flex items-center gap-2"
+                className="btn btn-primary flex items-center gap-2 hover:shadow-[0_10px_20px_rgba(124,58,237,0.3)] hover:-translate-y-0.5 transition-all"
                 onClick={() => setShowEdit(true)}
               >
                 <Edit3 size={16} /> Edit Profile
@@ -173,7 +180,7 @@ function ProfilePage({ user }) {
             {Object.entries(grouped).map(([sectionKey, sectionFields]) => {
               const sec = SECTIONS[sectionKey];
               return (
-                <GlassCard key={sectionKey} className="p-6">
+                <GlassCard key={sectionKey} className="p-6 hover:shadow-[0_15px_30px_rgba(0,0,0,0.2)] hover:scale-[1.01] transition-all duration-300">
                   <div className="flex items-center gap-2 mb-5">
                     <div className="w-1 h-5 rounded-full" style={{ background: sec.color }} />
                     <h3 className="font-bold text-sm uppercase tracking-wider" style={{ color: sec.color }}>
