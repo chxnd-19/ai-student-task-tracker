@@ -1,16 +1,18 @@
 /**
  * useClasses — TanStack Query hooks for class/workspace data.
  *
- * Replaces manual useState + useEffect fetch patterns.
- * All hooks share the same cache key so updates propagate everywhere.
+ * Query key design:
+ *   ['classes', 'list'] — all classes for the current user
+ *
+ * All mutations update the cache directly to avoid unnecessary refetches.
  */
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import api from '../services/api';
 
-// ── Query keys ────────────────────────────────────────────────────────────────
+// ── Structured query keys ─────────────────────────────────────────────────────
 export const classKeys = {
-  all:  ['classes'],
-  list: () => [...classKeys.all, 'list'],
+  all:  () => ['classes'],
+  list: () => ['classes', 'list'],
 };
 
 // ── Fetchers ──────────────────────────────────────────────────────────────────
@@ -38,7 +40,7 @@ const deleteClassFn = async (classId) => {
 
 /**
  * useClasses — fetch the current user's classes.
- * Automatically re-fetches on window focus and reconnect.
+ * Re-fetches on window focus and reconnect (from QueryClient defaults).
  */
 export function useClasses() {
   return useQuery({
@@ -49,7 +51,7 @@ export function useClasses() {
 
 /**
  * useCreateClass — mutation to create a new class.
- * Invalidates the class list on success.
+ * Appends to cache without a full refetch.
  */
 export function useCreateClass() {
   const qc = useQueryClient();
@@ -63,7 +65,7 @@ export function useCreateClass() {
 
 /**
  * useJoinClass — mutation to join a class by code.
- * Adds the new class to the cache without a full refetch.
+ * Adds the new class to the cache; deduplicates by _id.
  */
 export function useJoinClass() {
   const qc = useQueryClient();
@@ -80,7 +82,7 @@ export function useJoinClass() {
 
 /**
  * useDeleteClass — mutation to delete a class.
- * Removes it from the cache immediately (optimistic-style).
+ * Removes from cache immediately (optimistic).
  */
 export function useDeleteClass() {
   const qc = useQueryClient();

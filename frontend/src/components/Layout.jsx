@@ -117,7 +117,7 @@ const TopBar = ({ user, logout }) => {
     try {
       const { fetchNotifications } = await import('../services/notificationService');
       const res = await fetchNotifications();
-      setNotifications(res.data?.data || []);
+      setNotifications(res.data?.data?.notifications || []);
     } catch (_) {
       // non-critical — silently fail
     } finally {

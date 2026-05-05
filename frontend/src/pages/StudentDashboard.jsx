@@ -4,14 +4,13 @@ import {
   Clock, CheckCircle2, AlertCircle, TrendingUp,
   BookOpen, Users, Layers, ChevronRight, BarChart3, Flame,
 } from 'lucide-react';
+import { useQuery }                   from '@tanstack/react-query';
 import { useClasses, useJoinClass }   from '../hooks/useClasses';
 import { useTasks, useTaskSummary }   from '../hooks/useTasks';
 import { fetchMySubmissions }         from '../services/submissionService';
-import { useQuery }                   from '@tanstack/react-query';
 import SubmissionForm    from '../components/SubmissionForm';
 import ActivityFeed      from '../components/ActivityFeed';
 import Pagination        from '../components/Pagination';
-import { useSocket }     from '../hooks/useSocket';
 import { useToast }      from '../hooks/useToast';
 import Toast             from '../components/Toast';
 import { SkeletonDashboard } from '../components/SkeletonLoader';
@@ -29,6 +28,7 @@ function StudentDashboard() {
   const [searchQuery, setSearchQuery]         = useState('');
   const [filterStatus, setFilterStatus]       = useState('all');
   const [page, setPage]                       = useState(1);
+  const [code, setCode]                       = useState('');
 
   // ── TanStack Query ──────────────────────────────────────────────────────────
   const {
@@ -41,29 +41,28 @@ function StudentDashboard() {
 
   const joinMutation = useJoinClass();
 
+  const classId = activeWorkspace?._id ?? null;
+
   const {
     data: tasksResult,
     isLoading: tasksLoading,
   } = useTasks(
-    { classId: activeWorkspace?._id, page },
-    { enabled: !!activeWorkspace?._id }
+    { classId, page },
+    { enabled: !!classId }
   );
 
-  const tasks      = tasksResult?.data       || [];
-  const totalPages = tasksResult?.totalPages || 1;
-  const totalTasks = tasksResult?.total      || 0;
+  const tasks      = tasksResult?.data       ?? [];
+  const totalPages = tasksResult?.totalPages ?? 1;
+  const totalTasks = tasksResult?.total      ?? 0;
 
   const { data: summary = { pending: 0, submitted: 0, overdue: 0, late: 0 } } =
-    useTaskSummary(activeWorkspace?._id, { enabled: !!activeWorkspace?._id });
+    useTaskSummary(classId, { enabled: !!classId });
 
-  const { data: submissionsRes } = useQuery({
+  const { data: submissions = [] } = useQuery({
     queryKey: ['submissions', 'my'],
     queryFn:  fetchMySubmissions,
-    select:   (res) => res.data || [],
+    select:   (res) => res.data ?? [],
   });
-  const submissions = submissionsRes || [];
-
-  const { activities = [] } = useSocket(activeWorkspace?._id);
 
   // ── Auto-select first workspace ─────────────────────────────────────────────
   useEffect(() => {
@@ -72,11 +71,10 @@ function StudentDashboard() {
     }
   }, [workspaces, activeWorkspace]);
 
-  // Reset page when workspace changes
-  useEffect(() => { setPage(1); }, [activeWorkspace?._id]);
+  // ── Reset page when workspace, filter, or search changes ───────────────────
+  useEffect(() => { setPage(1); }, [classId, filterStatus, searchQuery]);
 
   // ── Join class ──────────────────────────────────────────────────────────────
-  const [code, setCode] = useState('');
   const handleJoin = async (e) => {
     e.preventDefault();
     if (!code.trim()) return;
@@ -86,7 +84,8 @@ function StudentDashboard() {
       setActiveWorkspace(joined);
       showToast(`Joined "${joined.name}" successfully!`);
     } catch (err) {
-      showToast(err.response?.data?.message || 'Join failed. Check the code.', 'error');
+      const msg = err.response?.data?.message || err.response?.data?.detail || 'Join failed. Check the code.';
+      showToast(msg, 'error');
     }
   };
 
@@ -126,7 +125,7 @@ function StudentDashboard() {
     [tasks, filterStatus, searchQuery, getSubmission]
   );
 
-  // ── Loading state ───────────────────────────────────────────────────────────
+  // ── Loading / error guards ──────────────────────────────────────────────────
   if (classesLoading) return (
     <Layout>
       <div className="mb-6">
@@ -137,7 +136,6 @@ function StudentDashboard() {
     </Layout>
   );
 
-  // ── Error state ─────────────────────────────────────────────────────────────
   if (classesError) return (
     <Layout>
       <ErrorState
@@ -147,6 +145,7 @@ function StudentDashboard() {
     </Layout>
   );
 
+  // ── Render ──────────────────────────────────────────────────────────────────
   return (
     <Layout>
       <Toast message={toast.message} type={toast.type} onClose={clearToast} />
@@ -158,7 +157,8 @@ function StudentDashboard() {
         </h1>
         <p className="text-sm text-gray-400 mt-1">
           {summary.pending} pending · {workspaces.length} classes
-        </p>      </div>
+        </p>
+      </div>
 
       {/* MAIN GRID */}
       <div className="grid grid-cols-3 gap-6">
@@ -169,10 +169,10 @@ function StudentDashboard() {
           {/* STATS 2×2 */}
           <div className="grid grid-cols-2 gap-4">
             {[
-              { icon: <Clock size={20} className="text-amber-400" />,    label: 'Pending',         value: summary.pending   },
-              { icon: <CheckCircle2 size={20} className="text-emerald-400" />, label: 'Completed',  value: summary.submitted },
-              { icon: <AlertCircle size={20} className="text-rose-400" />,label: 'Overdue',         value: summary.overdue   },
-              { icon: <TrendingUp size={20} className="text-blue-400" />, label: 'Completion Rate', value: analytics.total > 0 ? `${analytics.completionPct}%` : '--' },
+              { icon: <Clock size={20} className="text-amber-400" />,         label: 'Pending',         value: summary.pending   },
+              { icon: <CheckCircle2 size={20} className="text-emerald-400" />, label: 'Completed',       value: summary.submitted },
+              { icon: <AlertCircle size={20} className="text-rose-400" />,     label: 'Overdue',         value: summary.overdue   },
+              { icon: <TrendingUp size={20} className="text-blue-400" />,      label: 'Completion Rate', value: analytics.total > 0 ? `${analytics.completionPct}%` : '--' },
             ].map(({ icon, label, value }) => (
               <div key={label} className="bg-white/5 backdrop-blur-md border border-white/10 rounded-xl p-4 flex justify-between items-center hover:border-white/20 transition-all">
                 <div>
@@ -184,50 +184,44 @@ function StudentDashboard() {
             ))}
           </div>
 
-          {/* ANALYTICS SECTION */}
+          {/* ANALYTICS */}
           <div className="bg-white/5 backdrop-blur-md border border-white/10 rounded-xl p-5 hover:border-white/20 transition-all">
             <h2 className="text-base font-semibold flex items-center gap-2 mb-4">
               <BarChart3 size={18} className="text-purple-400" />
               Analytics
             </h2>
             <div className="grid grid-cols-3 gap-4">
-              {/* Completion bar */}
               <div className="col-span-2 space-y-3">
-                <div className="flex justify-between text-xs text-gray-400 mb-1">
-                  <span>Overall Completion</span>
-                  <span className="text-white font-semibold">{analytics.completionPct}%</span>
-                </div>
-                <div className="h-2 bg-white/10 rounded-full overflow-hidden">
-                  <div
-                    className="h-full bg-gradient-to-r from-purple-500 to-pink-500 rounded-full transition-all duration-700"
-                    style={{ width: `${analytics.completionPct}%` }}
-                  />
-                </div>
-                <div className="flex justify-between text-xs text-gray-400 mb-1">
-                  <span>On-time Rate</span>
-                  <span className="text-white font-semibold">{analytics.onTimePct}%</span>
-                </div>
-                <div className="h-2 bg-white/10 rounded-full overflow-hidden">
-                  <div
-                    className="h-full bg-gradient-to-r from-emerald-500 to-teal-500 rounded-full transition-all duration-700"
-                    style={{ width: `${analytics.onTimePct}%` }}
-                  />
-                </div>
+                {[
+                  { label: 'Overall Completion', pct: analytics.completionPct, from: 'from-purple-500', to: 'to-pink-500' },
+                  { label: 'On-time Rate',        pct: analytics.onTimePct,    from: 'from-emerald-500', to: 'to-teal-500' },
+                ].map(({ label, pct, from, to }) => (
+                  <div key={label}>
+                    <div className="flex justify-between text-xs text-gray-400 mb-1">
+                      <span>{label}</span>
+                      <span className="text-white font-semibold">{pct}%</span>
+                    </div>
+                    <div className="h-2 bg-white/10 rounded-full overflow-hidden">
+                      <div
+                        className={`h-full bg-gradient-to-r ${from} ${to} rounded-full transition-all duration-700`}
+                        style={{ width: `${pct}%` }}
+                      />
+                    </div>
+                  </div>
+                ))}
               </div>
-              {/* Streak / summary */}
               <div className="bg-white/5 rounded-xl p-3 border border-white/10 flex flex-col items-center justify-center gap-1">
                 <Flame size={22} className="text-orange-400" />
                 <p className="text-2xl font-bold">{analytics.completed}</p>
                 <p className="text-[10px] text-gray-400 text-center">Tasks Done</p>
               </div>
             </div>
-            {/* Status breakdown */}
             <div className="grid grid-cols-4 gap-2 mt-4">
               {[
-                { label: 'Pending',   value: summary.pending,   color: 'bg-amber-500'  },
-                { label: 'Done',      value: summary.submitted,  color: 'bg-emerald-500'},
-                { label: 'Overdue',   value: summary.overdue,    color: 'bg-rose-500'   },
-                { label: 'Late',      value: summary.late,       color: 'bg-orange-500' },
+                { label: 'Pending', value: summary.pending,   color: 'bg-amber-500'   },
+                { label: 'Done',    value: summary.submitted,  color: 'bg-emerald-500' },
+                { label: 'Overdue', value: summary.overdue,    color: 'bg-rose-500'    },
+                { label: 'Late',    value: summary.late,       color: 'bg-orange-500'  },
               ].map(({ label, value, color }) => (
                 <div key={label} className="bg-white/5 rounded-lg p-2 text-center border border-white/10">
                   <div className={`w-2 h-2 rounded-full ${color} mx-auto mb-1`} />
@@ -245,11 +239,11 @@ function StudentDashboard() {
                 <Layers size={18} className="text-purple-400" />
                 Active Assignments
               </h2>
-              <span className="text-sm text-gray-400">{tasks.length} total</span>
+              <span className="text-sm text-gray-400">{totalTasks} total</span>
             </div>
 
-            {/* Search + Filter */}
-            {tasks.length > 0 && (
+            {/* Search + Filter — reset page on change */}
+            {(tasks.length > 0 || searchQuery || filterStatus !== 'all') && (
               <div className="flex gap-3 mb-4">
                 <input
                   type="text"
@@ -272,14 +266,8 @@ function StudentDashboard() {
               </div>
             )}
 
-            {/* Pagination */}
-            <Pagination
-              page={page}
-              totalPages={totalPages}
-              total={totalTasks}
-              limit={20}
-              onPageChange={setPage}
-            />
+            {/* Task list */}
+            {tasksLoading ? (
               <div className="space-y-3">
                 {[...Array(3)].map((_, i) => (
                   <div key={i} className="bg-white/5 border border-white/10 rounded-lg p-4 flex items-center gap-4">
@@ -301,6 +289,12 @@ function StudentDashboard() {
               <div className="text-center text-gray-400 py-8">
                 <Layers size={28} className="mx-auto text-white/10 mb-3" />
                 <p className="text-sm">No tasks match your filter.</p>
+                <button
+                  onClick={() => { setSearchQuery(''); setFilterStatus('all'); }}
+                  className="mt-3 text-xs text-purple-400 hover:text-purple-300 underline"
+                >
+                  Clear filters
+                </button>
               </div>
             ) : (
               <div className="space-y-3">
@@ -350,14 +344,16 @@ function StudentDashboard() {
               </div>
             )}
 
-            {/* Pagination */}
-            <Pagination
-              page={page}
-              totalPages={totalPages}
-              total={totalTasks}
-              limit={20}
-              onPageChange={setPage}
-            />
+            {/* Pagination — only shown when not filtering client-side */}
+            {!searchQuery && filterStatus === 'all' && (
+              <Pagination
+                page={page}
+                totalPages={totalPages}
+                total={totalTasks}
+                limit={20}
+                onPageChange={setPage}
+              />
+            )}
           </div>
         </div>
 

@@ -129,6 +129,7 @@ async def create_task(payload: TaskCreate, user: dict, db: AsyncIOMotorDatabase)
         "classId":        class_id,
         "assignedTo":     assigned_to,
         "submissionType": payload.submissionType,
+        "priority":       getattr(payload, "priority", "medium"),
         "createdAt":      datetime.now(timezone.utc),
         "updatedAt":      datetime.now(timezone.utc),
     }
@@ -154,8 +155,8 @@ async def create_task(payload: TaskCreate, user: dict, db: AsyncIOMotorDatabase)
         f"title={doc['title']!r} by teacher={user['id']!r}"
     )
 
-    # Real-time activity
-    from app.services.socket_service import emit_activity
+    # Real-time activity + task_created event
+    from app.services.socket_service import emit_activity, emit_task_created
     if class_id:
         await emit_activity(
             str(class_id),
@@ -163,7 +164,8 @@ async def create_task(payload: TaskCreate, user: dict, db: AsyncIOMotorDatabase)
             user["name"],
             {"taskTitle": doc["title"]}
         )
-    
+        await emit_task_created(str(class_id), serialize_doc(task))
+
     return serialize_doc(task)
 
 
@@ -197,6 +199,10 @@ async def update_task(task_id: str, payload: TaskUpdate, user: dict, db: AsyncIO
     # Invalidate summary cache for all affected students
     for sid in assigned_to:
         summary_cache.invalidate_prefix(f"summary:{str(sid)}:")
+    # Real-time task_updated event
+    if existing.get("classId"):
+        from app.services.socket_service import emit_task_updated
+        await emit_task_updated(str(existing["classId"]), serialize_doc(task))
     return serialize_doc(task)
 
 
@@ -216,6 +222,10 @@ async def delete_task(task_id: str, user: dict, db: AsyncIOMotorDatabase) -> Non
     if existing:
         for sid in existing.get("assignedTo", []):
             summary_cache.invalidate_prefix(f"summary:{str(sid)}:")
+    # Real-time task_deleted event
+    if existing and existing.get("classId"):
+        from app.services.socket_service import emit_task_deleted
+        await emit_task_deleted(str(existing["classId"]), task_id)
 
 
 # ── GET /api/tasks/students ────────────────────────────────────────────────────

@@ -22,6 +22,7 @@ from app.api.task import router as task_router
 from app.api.submission import router as submission_router
 from app.api.notification import router as notification_router
 from app.api.user import router as user_router
+from app.api.activity import router as activity_router
 from app.services.socket_service import sio_app
 
 logger = logging.getLogger(__name__)
@@ -111,6 +112,7 @@ app.include_router(task_router,         prefix="/api")
 app.include_router(submission_router,   prefix="/api")
 app.include_router(notification_router, prefix="/api")
 app.include_router(user_router,         prefix="/api")
+app.include_router(activity_router,     prefix="/api")
 
 # ── Socket.IO ─────────────────────────────────────────────────────────────────
 app.mount("/socket.io", sio_app)

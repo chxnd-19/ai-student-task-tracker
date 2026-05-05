@@ -1,6 +1,16 @@
+/**
+ * ActivityFeed — real-time activity log viewer.
+ *
+ * Uses TanStack Query with a 60s staleTime.
+ * Renders structured detail metadata (task title, class name, email)
+ * alongside human-readable action labels.
+ */
 import React, { memo } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Activity, RefreshCw } from 'lucide-react';
+import {
+  Activity, RefreshCw, LogIn, UserPlus, BookOpen,
+  CheckCircle2, Trash2, Edit3, Users, Key,
+} from 'lucide-react';
 import api from '../services/api';
 
 // ── Fetcher ───────────────────────────────────────────────────────────────────
@@ -9,26 +19,51 @@ const fetchActivityLogs = async ({ page = 1, limit = 10 } = {}) => {
   return res.data;
 };
 
-// ── Action label map ──────────────────────────────────────────────────────────
-const ACTION_LABELS = {
-  'auth.login':              'Logged in',
-  'auth.signup':             'Signed up',
-  'auth.forgot_password':    'Requested password reset',
-  'auth.password_reset':     'Reset password',
-  'task.create':             'Created a task',
-  'task.update':             'Updated a task',
-  'task.delete':             'Deleted a task',
-  'submission.submit':       'Submitted an assignment',
-  'class.create':            'Created a class',
-  'class.join':              'Joined a class',
+// ── Action metadata ───────────────────────────────────────────────────────────
+const ACTION_META = {
+  'auth.login':              { label: 'Logged in',               icon: LogIn,        color: 'text-blue-400',    bg: 'bg-blue-500/10'    },
+  'auth.signup':             { label: 'Signed up',               icon: UserPlus,     color: 'text-purple-400',  bg: 'bg-purple-500/10'  },
+  'auth.forgot_password':    { label: 'Requested password reset', icon: Key,          color: 'text-amber-400',   bg: 'bg-amber-500/10'   },
+  'auth.password_reset':     { label: 'Reset password',           icon: Key,          color: 'text-emerald-400', bg: 'bg-emerald-500/10' },
+  'task.create':             { label: 'Created a task',           icon: BookOpen,     color: 'text-purple-400',  bg: 'bg-purple-500/10'  },
+  'task.update':             { label: 'Updated a task',           icon: Edit3,        color: 'text-blue-400',    bg: 'bg-blue-500/10'    },
+  'task.delete':             { label: 'Deleted a task',           icon: Trash2,       color: 'text-rose-400',    bg: 'bg-rose-500/10'    },
+  'submission.submit':       { label: 'Submitted an assignment',  icon: CheckCircle2, color: 'text-emerald-400', bg: 'bg-emerald-500/10' },
+  'class.create':            { label: 'Created a class',          icon: Users,        color: 'text-purple-400',  bg: 'bg-purple-500/10'  },
+  'class.join':              { label: 'Joined a class',           icon: Users,        color: 'text-blue-400',    bg: 'bg-blue-500/10'    },
 };
 
-function actionLabel(action) {
-  return ACTION_LABELS[action] || action.replace(/\./g, ' → ');
+const DEFAULT_META = { label: null, icon: Activity, color: 'text-white/40', bg: 'bg-white/5' };
+
+function getActionMeta(action) {
+  return ACTION_META[action] ?? DEFAULT_META;
+}
+
+/**
+ * Build a human-readable subtitle from structured detail metadata.
+ * Prefers named fields (taskTitle, className, email) over raw key:value.
+ */
+function buildSubtitle(detail = {}) {
+  if (!detail || Object.keys(detail).length === 0) return null;
+
+  const parts = [];
+  if (detail.taskTitle)  parts.push(detail.taskTitle);
+  if (detail.className)  parts.push(detail.className);
+  if (detail.email)      parts.push(detail.email);
+  if (detail.role)       parts.push(detail.role);
+
+  if (parts.length > 0) return parts.join(' · ');
+
+  // Fallback: render remaining keys, skip internal ones
+  const skip = new Set(['ip', 'reason', 'expected_role', 'actual_role']);
+  return Object.entries(detail)
+    .filter(([k]) => !skip.has(k))
+    .map(([, v]) => String(v))
+    .join(' · ') || null;
 }
 
 function timeAgo(dateStr) {
-  const diff = Date.now() - new Date(dateStr).getTime();
+  const diff  = Date.now() - new Date(dateStr).getTime();
   const mins  = Math.floor(diff / 60000);
   const hours = Math.floor(diff / 3600000);
   const days  = Math.floor(diff / 86400000);
@@ -40,23 +75,25 @@ function timeAgo(dateStr) {
 
 // ── Single log row ────────────────────────────────────────────────────────────
 const LogRow = memo(function LogRow({ log }) {
+  const meta     = getActionMeta(log.action);
+  const Icon     = meta.icon;
+  const label    = meta.label ?? log.action.replace(/\./g, ' → ');
+  const subtitle = buildSubtitle(log.detail);
+
   return (
     <div className="flex items-start gap-3 py-2.5 border-b border-white/5 last:border-0">
-      <div className="w-7 h-7 rounded-full bg-purple-500/10 border border-purple-500/20 flex items-center justify-center shrink-0 mt-0.5">
-        <Activity size={12} className="text-purple-400" />
+      <div className={`w-7 h-7 rounded-full ${meta.bg} border border-white/10 flex items-center justify-center shrink-0 mt-0.5`}>
+        <Icon size={12} className={meta.color} />
       </div>
       <div className="flex-1 min-w-0">
-        <p className="text-xs text-white/70 leading-relaxed">{actionLabel(log.action)}</p>
-        {log.detail && Object.keys(log.detail).length > 0 && (
-          <p className="text-[10px] text-white/30 mt-0.5 truncate">
-            {Object.entries(log.detail)
-              .filter(([k]) => !['ip'].includes(k))
-              .map(([k, v]) => `${k}: ${v}`)
-              .join(' · ')}
-          </p>
+        <p className="text-xs text-white/70 leading-relaxed">{label}</p>
+        {subtitle && (
+          <p className="text-[10px] text-white/30 mt-0.5 truncate">{subtitle}</p>
         )}
       </div>
-      <span className="text-[10px] text-white/20 shrink-0 mt-0.5">{timeAgo(log.createdAt)}</span>
+      <span className="text-[10px] text-white/20 shrink-0 mt-0.5 whitespace-nowrap">
+        {timeAgo(log.createdAt)}
+      </span>
     </div>
   );
 });
@@ -66,10 +103,10 @@ function ActivityFeed({ limit = 10, showTitle = true }) {
   const { data, isLoading, isError, refetch, isFetching } = useQuery({
     queryKey: ['activity', limit],
     queryFn:  () => fetchActivityLogs({ limit }),
-    staleTime: 60 * 1000, // 1 minute
+    staleTime: 60 * 1000,
   });
 
-  const logs = data?.data || [];
+  const logs = data?.data ?? [];
 
   return (
     <div>
@@ -108,7 +145,9 @@ function ActivityFeed({ limit = 10, showTitle = true }) {
         <p className="text-xs text-white/30 text-center py-4">No activity yet.</p>
       ) : (
         <div>
-          {logs.map(log => <LogRow key={log._id || log.createdAt} log={log} />)}
+          {logs.map(log => (
+            <LogRow key={log._id ?? log.createdAt} log={log} />
+          ))}
         </div>
       )}
     </div>
