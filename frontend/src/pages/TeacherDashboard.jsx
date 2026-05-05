@@ -1,34 +1,19 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import api from '../services/api';
-import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
-  Plus, 
-  Users, 
-  BookOpen, 
-  BarChart3, 
-  Trash2, 
-  Edit3, 
-  Copy,
-  Check,
-  X,
-  Calendar as CalendarIcon,
-  Layers,
-  ChevronRight,
-  TrendingUp,
-  LayoutDashboard,
-  Target,
-  Sparkles,
+  Plus, Users, BookOpen, BarChart3, Trash2, Edit3, Copy, Check, X,
+  Calendar as CalendarIcon, Layers, ChevronRight, TrendingUp, Target, Sparkles,
 } from 'lucide-react';
 import { fetchTasks, createTask, updateTask, deleteTask, fetchStudents } from '../services/taskService';
 import { fetchSubmissionsForTask, fetchClassAnalytics } from '../services/submissionService';
 import SubmissionList from '../components/SubmissionList';
 import LiveActivityPanel from '../components/LiveActivityPanel';
 import { useSocket } from '../hooks/useSocket';
-import Spinner from '../components/Spinner';
+import { useToast } from '../hooks/useToast';
 import Toast from '../components/Toast';
-import GlassCard from '../components/GlassCard';
-import EmptyState from '../components/EmptyState';
+import { SkeletonDashboard } from '../components/SkeletonLoader';
+import ErrorState from '../components/ErrorState';
 import Layout from '../components/Layout';
 import { useAuth } from '../context/AuthContext';
 
@@ -36,34 +21,29 @@ const emptyTask = { title: '', subject: '', dueDate: '', description: '', status
 
 function TeacherDashboard() {
   const { user } = useAuth();
-  // State Management
-  const [workspaceName, setWorkspaceName] = useState("");
-  const [workspaces, setWorkspaces] = useState([]);
+  const { toast, showToast, clearToast } = useToast();
+
+  const [workspaceName, setWorkspaceName]   = useState('');
+  const [workspaces, setWorkspaces]         = useState([]);
   const [activeWorkspace, setActiveWorkspace] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [tasks, setTasks] = useState([]);
-  const [form, setForm] = useState(emptyTask);
-  const [editId, setEditId] = useState(null);
-  const [showForm, setShowForm] = useState(false);
-  const [submitting, setSubmitting] = useState(false);
-  const [viewTask, setViewTask] = useState(null);
-  const [submissions, setSubmissions] = useState([]);
-  const [analytics, setAnalytics] = useState({});
+  const [loading, setLoading]               = useState(true);
+  const [loadError, setLoadError]           = useState(null);
+  const [tasksLoading, setTasksLoading]     = useState(false);
+  const [tasks, setTasks]                   = useState([]);
+  const [form, setForm]                     = useState(emptyTask);
+  const [editId, setEditId]                 = useState(null);
+  const [showForm, setShowForm]             = useState(false);
+  const [submitting, setSubmitting]         = useState(false);
+  const [viewTask, setViewTask]             = useState(null);
+  const [analytics, setAnalytics]           = useState({});
   const [showClassModal, setShowClassModal] = useState(false);
-  const [copiedCode, setCopiedCode] = useState(false);
-  const [toast, setToast] = useState({ message: '', type: 'success' });
-  const [students, setStudents] = useState([]);
-  const [avgGrade, setAvgGrade] = useState('--');
+  const [copiedCode, setCopiedCode]         = useState(false);
+  const [students, setStudents]             = useState([]);
+  const [avgGrade, setAvgGrade]             = useState('--');
   const [completionRate, setCompletionRate] = useState(0);
-  const [searchQuery, setSearchQuery] = useState('');
+  const [searchQuery, setSearchQuery]       = useState('');
   const [filterPriority, setFilterPriority] = useState('all');
-
   const { activities = [] } = useSocket(activeWorkspace?._id);
-
-  const showToast = useCallback((message, type = 'success') => {
-    setToast({ message, type });
-  }, []);
-
   // Calculate average grade from analytics
   const calculateAverageGrade = useCallback((analyticsData) => {
     const taskAnalytics = Object.values(analyticsData);
@@ -106,11 +86,13 @@ function TeacherDashboard() {
   }, []);
 
   const fetchWorkspaces = async () => {
+    setLoading(true);
+    setLoadError(null);
     try {
       const res = await api.get("/api/classes");
       setWorkspaces(res.data.data || []);
     } catch (err) {
-      console.error("Fetch failed:", err);
+      setLoadError(err.response?.data?.message || 'Failed to load workspaces.');
     } finally {
       setLoading(false);
     }
@@ -132,12 +114,13 @@ function TeacherDashboard() {
       setWorkspaces(prev => [...prev, workspace]);
       showToast(`Workspace "${workspace.name}" created!`);
     } catch (err) {
-      showToast("Failed to create workspace", "error");
+      showToast(err.response?.data?.message || "Failed to create workspace", "error");
     }
   };
 
   const loadWorkspaceData = useCallback(async (cls) => {
     if (!cls?._id) return;
+    setTasksLoading(true);
     try {
       const [tRes, aRes, sRes] = await Promise.all([
         fetchTasks({ classId: cls._id }),
@@ -165,6 +148,8 @@ function TeacherDashboard() {
       setCompletionRate(rate);
     } catch (err) {
       console.error("[Dashboard] Session load failed:", err);
+    } finally {
+      setTasksLoading(false);
     }
   }, [calculateAverageGrade, calculateCompletionRate]);
 
@@ -210,14 +195,28 @@ function TeacherDashboard() {
     }
   };
 
-  if (loading) return <div className="p-20"><Spinner text="Loading your management portal..." /></div>;
+  if (loading) return (
+    <Layout>
+      <div className="mb-6">
+        <div className="animate-pulse bg-white/10 rounded h-7 w-48 mb-2" />
+        <div className="animate-pulse bg-white/5 rounded h-4 w-32" />
+      </div>
+      <SkeletonDashboard />
+    </Layout>
+  );
+
+  if (loadError) return (
+    <Layout>
+      <ErrorState message={loadError} onRetry={fetchWorkspaces} />
+    </Layout>
+  );
 
   return (
     <Layout>
       <div className="glow-blob top-0 -right-20 w-[500px] h-[500px] bg-purple-500/10" />
       <div className="glow-blob bottom-0 -left-20 w-[600px] h-[600px] bg-blue-500/10" />
 
-      <Toast message={toast.message} type={toast.type} onClose={() => setToast({ message: '', type: 'success' })} />
+      <Toast message={toast.message} type={toast.type} onClose={clearToast} />
 
       {/* HEADER */}
       <div className="mb-6">
@@ -289,6 +288,52 @@ function TeacherDashboard() {
             </div>
           </div>
 
+          {/* ANALYTICS SECTION */}
+          <div className="bg-white/5 backdrop-blur-md border border-white/10 rounded-xl p-5 hover:border-white/20 transition-all">
+            <h2 className="text-base font-semibold flex items-center gap-2 mb-4">
+              <BarChart3 size={18} className="text-purple-400" />
+              Class Analytics
+            </h2>
+            <div className="grid grid-cols-2 gap-4 mb-4">
+              <div className="space-y-2">
+                <div className="flex justify-between text-xs text-gray-400">
+                  <span>Completion Rate</span>
+                  <span className="text-white font-semibold">{completionRate}%</span>
+                </div>
+                <div className="h-2 bg-white/10 rounded-full overflow-hidden">
+                  <div
+                    className="h-full bg-gradient-to-r from-purple-500 to-pink-500 rounded-full transition-all duration-700"
+                    style={{ width: `${completionRate}%` }}
+                  />
+                </div>
+              </div>
+              <div className="space-y-2">
+                <div className="flex justify-between text-xs text-gray-400">
+                  <span>Avg. Grade</span>
+                  <span className="text-white font-semibold">{avgGrade}</span>
+                </div>
+                <div className="h-2 bg-white/10 rounded-full overflow-hidden">
+                  <div
+                    className="h-full bg-gradient-to-r from-emerald-500 to-teal-500 rounded-full transition-all duration-700"
+                    style={{ width: avgGrade !== '--' ? `${['F','D','C','B','A'].indexOf(avgGrade) * 25}%` : '0%' }}
+                  />
+                </div>
+              </div>
+            </div>
+            <div className="grid grid-cols-3 gap-3">
+              {[
+                { label: 'Total Tasks',   value: tasks.length,    color: 'text-purple-400' },
+                { label: 'Students',      value: students.length, color: 'text-blue-400'   },
+                { label: 'Completion',    value: `${completionRate}%`, color: 'text-emerald-400' },
+              ].map(({ label, value, color }) => (
+                <div key={label} className="bg-white/5 rounded-xl p-3 border border-white/10 text-center">
+                  <p className={`text-xl font-bold ${color}`}>{value}</p>
+                  <p className="text-[10px] text-gray-400 mt-0.5">{label}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+
           {/* ASSIGNMENTS */}
           <div className="bg-white/5 backdrop-blur-md border border-white/10 rounded-xl p-5 hover:border-white/20 transition-all">
             <div className="flex items-center justify-between mb-4">
@@ -329,7 +374,19 @@ function TeacherDashboard() {
               </div>
             )}
 
-            {tasks.length === 0 ? (
+            {tasksLoading ? (
+              <div className="space-y-3">
+                {[...Array(3)].map((_, i) => (
+                  <div key={i} className="bg-white/5 border border-white/10 rounded-lg p-4 flex items-center gap-4">
+                    <div className="animate-pulse bg-white/10 rounded-lg w-10 h-10 shrink-0" />
+                    <div className="flex-1 space-y-2">
+                      <div className="animate-pulse bg-white/10 rounded h-3 w-3/4" />
+                      <div className="animate-pulse bg-white/5 rounded h-2.5 w-1/2" />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : tasks.length === 0 ? (
               <div className="text-center text-gray-400 py-12">
                 <Sparkles size={40} className="mx-auto text-white/10 mb-4" />
                 <p className="text-sm mb-4">No assignments yet</p>
@@ -342,8 +399,7 @@ function TeacherDashboard() {
                   </button>
                 )}
               </div>
-            ) : (
-              <div className="space-y-3">
+            ) : (              <div className="space-y-3">
                 {tasks
                   .filter(t => filterPriority === 'all' || t.priority === filterPriority)
                   .filter(t => !searchQuery || t.title.toLowerCase().includes(searchQuery.toLowerCase()) || t.subject.toLowerCase().includes(searchQuery.toLowerCase()))

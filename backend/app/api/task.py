@@ -82,7 +82,6 @@ async def create_task(
     user:    dict = Depends(require_teacher),
 ):
     db   = get_db()
-    print(f"[TASK CREATE] USER: {user['email']} DATA: {payload}")
     task = await task_service.create_task(payload, user, db)
     return ok(task, status=201)
 

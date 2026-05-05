@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
   LayoutDashboard, 
@@ -103,11 +103,35 @@ const Sidebar = ({ isCollapsed, setIsCollapsed }) => {
 
 const TopBar = ({ user, logout }) => {
   const [showNotifications, setShowNotifications] = useState(false);
-  const [showProfile, setShowProfile] = useState(false);
-  const [notifications, setNotifications] = useState([]); // Add notifications state
+  const [showProfile, setShowProfile]             = useState(false);
+  const [notifications, setNotifications]         = useState([]);
+  const [notifsLoading, setNotifsLoading]         = useState(false);
   const navigate = useNavigate();
   const notificationRef = useRef(null);
-  const profileRef = useRef(null);
+  const profileRef      = useRef(null);
+
+  // Load notifications when bell is opened
+  const loadNotifications = useCallback(async () => {
+    if (notifsLoading) return;
+    setNotifsLoading(true);
+    try {
+      const { fetchNotifications } = await import('../services/notificationService');
+      const res = await fetchNotifications();
+      setNotifications(res.data?.data || []);
+    } catch (_) {
+      // non-critical — silently fail
+    } finally {
+      setNotifsLoading(false);
+    }
+  }, [notifsLoading]);
+
+  const handleBellClick = () => {
+    const next = !showNotifications;
+    setShowNotifications(next);
+    if (next) loadNotifications();
+  };
+
+  const unreadCount = notifications.filter(n => !n.isRead).length;
 
   // Click outside handler
   useEffect(() => {
@@ -143,12 +167,12 @@ const TopBar = ({ user, logout }) => {
           <div className="relative" ref={notificationRef}>
             <motion.button 
               whileHover={{ scale: 1.1 }}
-              onClick={() => setShowNotifications(!showNotifications)}
+              onClick={handleBellClick}
               className="relative p-2 text-white/20 hover:text-white transition-colors"
             >
               <Bell size={18} />
-              {notifications.length > 0 && (
-                <span className="absolute top-2.5 right-2.5 w-1.5 h-1.5 bg-pink-500 rounded-full"></span>
+              {unreadCount > 0 && (
+                <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-pink-500 rounded-full ring-2 ring-[#0b0f1a]" />
               )}
             </motion.button>
             
@@ -158,17 +182,35 @@ const TopBar = ({ user, logout }) => {
                   initial={{ opacity: 0, y: 10, scale: 0.95 }}
                   animate={{ opacity: 1, y: 0, scale: 1 }}
                   exit={{ opacity: 0, y: 10, scale: 0.95 }}
-                  className="absolute right-0 mt-2 w-80 bg-white/10 backdrop-blur-lg border border-white/10 rounded-xl shadow-2xl overflow-hidden z-50"
+                  className="absolute right-0 mt-2 w-80 bg-[#111827] backdrop-blur-lg border border-white/10 rounded-xl shadow-2xl overflow-hidden z-50"
                 >
-                  <div className="p-4 border-b border-white/10">
+                  <div className="p-4 border-b border-white/10 flex items-center justify-between">
                     <h3 className="text-sm font-semibold">Notifications</h3>
+                    {unreadCount > 0 && (
+                      <span className="text-xs text-purple-400 font-semibold">{unreadCount} unread</span>
+                    )}
                   </div>
-                  <div className="p-4 text-center text-gray-400 text-sm">
-                    {notifications.length === 0 ? "No notifications" : (
-                      <div className="space-y-2">
-                        {notifications.map((notif, index) => (
-                          <div key={index} className="p-3 bg-white/5 rounded-lg text-left">
-                            {notif.message}
+                  <div className="max-h-72 overflow-y-auto">
+                    {notifsLoading ? (
+                      <div className="p-4 space-y-2">
+                        {[...Array(3)].map((_, i) => (
+                          <div key={i} className="animate-pulse bg-white/5 rounded-lg h-12" />
+                        ))}
+                      </div>
+                    ) : notifications.length === 0 ? (
+                      <div className="p-6 text-center text-gray-400 text-sm">
+                        No notifications
+                      </div>
+                    ) : (
+                      <div className="p-2 space-y-1">
+                        {notifications.slice(0, 10).map((notif, i) => (
+                          <div key={notif._id || i} className={`p-3 rounded-lg text-sm transition-colors ${notif.isRead ? 'text-white/40' : 'bg-white/5 text-white/80'}`}>
+                            <p>{notif.message}</p>
+                            {notif.createdAt && (
+                              <p className="text-[10px] text-white/20 mt-1">
+                                {new Date(notif.createdAt).toLocaleDateString()}
+                              </p>
+                            )}
                           </div>
                         ))}
                       </div>

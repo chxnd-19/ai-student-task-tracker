@@ -30,6 +30,8 @@ async def _create_indexes(db: AsyncIOMotorDatabase) -> None:
             IndexModel([("classId",    ASCENDING)]),
             IndexModel([("assignedTo", ASCENDING)]),
             IndexModel([("dueDate",    ASCENDING)]),
+            IndexModel([("status",     ASCENDING)]),
+            IndexModel([("priority",   ASCENDING)]),
             IndexModel([("createdAt",  DESCENDING)]),
             IndexModel([("assignedTo", ASCENDING), ("dueDate", ASCENDING)]),
         ]),
