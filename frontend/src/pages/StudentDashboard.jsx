@@ -11,6 +11,7 @@ import { fetchMySubmissions }         from '../services/submissionService';
 import SubmissionForm    from '../components/SubmissionForm';
 import ActivityFeed      from '../components/ActivityFeed';
 import Pagination        from '../components/Pagination';
+import AIInsights        from '../components/AIInsights';
 import { useSocket }     from '../hooks/useSocket';
 import { useToast }      from '../hooks/useToast';
 import Toast             from '../components/Toast';
@@ -236,6 +237,9 @@ function StudentDashboard() {
               ))}
             </div>
           </div>
+
+          {/* AI STUDY INTELLIGENCE — above task list */}
+          <AIInsights classId={classId} />
 
           {/* ASSIGNMENTS */}
           <div className="bg-white/5 backdrop-blur-md border border-white/10 rounded-xl p-5 hover:border-white/20 transition-all">
