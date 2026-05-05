@@ -117,6 +117,7 @@ const TopBar = ({ user, logout }) => {
     try {
       const { fetchNotifications } = await import('../services/notificationService');
       const res = await fetchNotifications();
+      // Shape: { success, data: { notifications, unreadCount } }
       setNotifications(res.data?.data?.notifications || []);
     } catch (_) {
       // non-critical — silently fail
@@ -131,6 +132,7 @@ const TopBar = ({ user, logout }) => {
     if (next) loadNotifications();
   };
 
+  // Derive unread count from local state (updated by socket in real-time)
   const unreadCount = notifications.filter(n => !n.isRead).length;
 
   // Click outside handler

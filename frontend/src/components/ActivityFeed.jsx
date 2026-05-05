@@ -1,7 +1,8 @@
 /**
  * ActivityFeed — real-time activity log viewer.
  *
- * Uses TanStack Query with a 60s staleTime.
+ * Query key: ['activity', userId, limit]
+ * Scoped per user so each user's feed is cached independently.
  * Renders structured detail metadata (task title, class name, email)
  * alongside human-readable action labels.
  */
@@ -12,6 +13,8 @@ import {
   CheckCircle2, Trash2, Edit3, Users, Key,
 } from 'lucide-react';
 import api from '../services/api';
+import { useAuth } from '../context/AuthContext';
+import { activityKey } from '../hooks/useSocket';
 
 // ── Fetcher ───────────────────────────────────────────────────────────────────
 const fetchActivityLogs = async ({ page = 1, limit = 10 } = {}) => {
@@ -100,10 +103,14 @@ const LogRow = memo(function LogRow({ log }) {
 
 // ── Main component ────────────────────────────────────────────────────────────
 function ActivityFeed({ limit = 10, showTitle = true }) {
+  const { user } = useAuth();
+  const userId   = user?.id ?? null;
+
   const { data, isLoading, isError, refetch, isFetching } = useQuery({
-    queryKey: ['activity', limit],
+    queryKey: activityKey(userId, limit),   // Step 5: user-scoped key
     queryFn:  () => fetchActivityLogs({ limit }),
     staleTime: 60 * 1000,
+    enabled:   !!userId,                    // only fetch when authenticated
   });
 
   const logs = data?.data ?? [];

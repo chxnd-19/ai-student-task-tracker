@@ -11,6 +11,7 @@ import { fetchMySubmissions }         from '../services/submissionService';
 import SubmissionForm    from '../components/SubmissionForm';
 import ActivityFeed      from '../components/ActivityFeed';
 import Pagination        from '../components/Pagination';
+import { useSocket }     from '../hooks/useSocket';
 import { useToast }      from '../hooks/useToast';
 import Toast             from '../components/Toast';
 import { SkeletonDashboard } from '../components/SkeletonLoader';
@@ -42,6 +43,7 @@ function StudentDashboard() {
   const joinMutation = useJoinClass();
 
   const classId = activeWorkspace?._id ?? null;
+  const userId  = user?.id ?? null;
 
   const {
     data: tasksResult,
@@ -63,6 +65,9 @@ function StudentDashboard() {
     queryFn:  fetchMySubmissions,
     select:   (res) => res.data ?? [],
   });
+
+  // ── Real-time socket (auth-gated) ───────────────────────────────────────────
+  useSocket(classId, userId);
 
   // ── Auto-select first workspace ─────────────────────────────────────────────
   useEffect(() => {
