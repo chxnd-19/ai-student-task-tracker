@@ -322,7 +322,68 @@ Three levels: **Low**, **Medium**, **High**. Stored in MongoDB, displayed as col
 
 ---
 
-## Future Improvements
+## Deployment
+
+### Backend — Render
+
+1. Create a new **Web Service** on [render.com](https://render.com)
+2. Connect your GitHub repository
+3. Configure:
+   - **Root Directory**: `backend`
+   - **Build Command**: `pip install -r requirements.txt`
+   - **Start Command**: `uvicorn app.main:app --host 0.0.0.0 --port $PORT`
+4. Add environment variables in the Render dashboard:
+   ```
+   MONGO_URI=mongodb+srv://...
+   JWT_SECRET=your_secret_here
+   ENVIRONMENT=production
+   FRONTEND_URL=https://your-app.vercel.app
+   PORT=10000
+   DB_NAME=taskdb
+   ```
+
+### Frontend — Vercel
+
+1. Import your GitHub repository on [vercel.com](https://vercel.com)
+2. Configure:
+   - **Root Directory**: `frontend`
+   - **Framework Preset**: Vite
+   - **Build Command**: `npm run build`
+   - **Output Directory**: `dist`
+3. Add environment variables:
+   ```
+   VITE_API_URL=https://your-backend.onrender.com
+   ```
+4. `vercel.json` is already included for SPA routing.
+
+### Pre-deploy checklist
+
+- [ ] `MONGO_URI` points to Atlas (not localhost)
+- [ ] `JWT_SECRET` is a random 32+ character string
+- [ ] `ENVIRONMENT=production`
+- [ ] `FRONTEND_URL` matches your Vercel domain exactly
+- [ ] `VITE_API_URL` matches your Render URL (no trailing slash)
+
+---
+
+## TanStack Query
+
+Data fetching is managed by [TanStack Query v5](https://tanstack.com/query/latest):
+
+| Hook | Purpose |
+|------|---------|
+| `useClasses()` | Fetch user's classes with caching + refetch on focus |
+| `useJoinClass()` | Mutation — join class, update cache optimistically |
+| `useCreateClass()` | Mutation — create class, append to cache |
+| `useTasks(params)` | Fetch paginated tasks for a class |
+| `useTaskSummary(classId)` | Fetch student task status counts |
+| `useCreateTask()` | Mutation — create task, invalidate list |
+| `useUpdateTask()` | Mutation — update task, invalidate list |
+| `useDeleteTask()` | Mutation — delete task, remove from cache |
+
+Cache configuration: `staleTime: 30s`, `gcTime: 5min`, `retry: 1`, `refetchOnWindowFocus: true`
+
+---
 
 - [ ] Email integration (SendGrid / AWS SES)
 - [ ] Calendar view for task deadlines

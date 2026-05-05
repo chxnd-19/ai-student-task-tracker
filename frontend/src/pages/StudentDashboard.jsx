@@ -1,66 +1,69 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import { AnimatePresence } from 'framer-motion';
-import api from '../services/api';
 import {
-  Clock,
-  CheckCircle2,
-  AlertCircle,
-  TrendingUp,
-  BookOpen,
-  Users,
-  Layers,
-  ChevronRight,
-  BarChart3,
-  Flame,
+  Clock, CheckCircle2, AlertCircle, TrendingUp,
+  BookOpen, Users, Layers, ChevronRight, BarChart3, Flame,
 } from 'lucide-react';
-import { fetchTasks, fetchTaskSummary } from '../services/taskService';
-import { fetchMySubmissions } from '../services/submissionService';
-import SubmissionForm from '../components/SubmissionForm';
-import LiveActivityPanel from '../components/LiveActivityPanel';
-import { useSocket } from '../hooks/useSocket';
-import { useToast } from '../hooks/useToast';
-import Toast from '../components/Toast';
+import { useClasses, useJoinClass }   from '../hooks/useClasses';
+import { useTasks, useTaskSummary }   from '../hooks/useTasks';
+import { fetchMySubmissions }         from '../services/submissionService';
+import { useQuery }                   from '@tanstack/react-query';
+import SubmissionForm    from '../components/SubmissionForm';
+import ActivityFeed      from '../components/ActivityFeed';
+import Pagination        from '../components/Pagination';
+import { useSocket }     from '../hooks/useSocket';
+import { useToast }      from '../hooks/useToast';
+import Toast             from '../components/Toast';
 import { SkeletonDashboard } from '../components/SkeletonLoader';
-import ErrorState from '../components/ErrorState';
+import ErrorState        from '../components/ErrorState';
 import { getTaskStatus, STATUS_META } from '../utils/taskStatus';
-import Layout from '../components/Layout';
-import { useAuth } from '../context/AuthContext';
+import Layout            from '../components/Layout';
+import { useAuth }       from '../context/AuthContext';
 
 function StudentDashboard() {
   const { user } = useAuth();
   const { toast, showToast, clearToast } = useToast();
 
-  const [code, setCode]                 = useState('');
-  const [workspaces, setWorkspaces]     = useState([]);
   const [activeWorkspace, setActiveWorkspace] = useState(null);
-  const [loading, setLoading]           = useState(true);
-  const [loadError, setLoadError]       = useState(null);
-  const [tasksLoading, setTasksLoading] = useState(false);
-  const [tasks, setTasks]               = useState([]);
-  const [submissions, setSubmissions]   = useState([]);
-  const [summary, setSummary]           = useState({ pending: 0, submitted: 0, overdue: 0, late: 0 });
-  const [activeTask, setActiveTask]     = useState(null);
-  const [joining, setJoining]           = useState(false);
-  const [searchQuery, setSearchQuery]   = useState('');
-  const [filterStatus, setFilterStatus] = useState('all');
+  const [activeTask, setActiveTask]           = useState(null);
+  const [searchQuery, setSearchQuery]         = useState('');
+  const [filterStatus, setFilterStatus]       = useState('all');
+  const [page, setPage]                       = useState(1);
+
+  // ── TanStack Query ──────────────────────────────────────────────────────────
+  const {
+    data: workspaces = [],
+    isLoading: classesLoading,
+    isError: classesError,
+    refetch: refetchClasses,
+    error: classesErr,
+  } = useClasses();
+
+  const joinMutation = useJoinClass();
+
+  const {
+    data: tasksResult,
+    isLoading: tasksLoading,
+  } = useTasks(
+    { classId: activeWorkspace?._id, page },
+    { enabled: !!activeWorkspace?._id }
+  );
+
+  const tasks      = tasksResult?.data       || [];
+  const totalPages = tasksResult?.totalPages || 1;
+  const totalTasks = tasksResult?.total      || 0;
+
+  const { data: summary = { pending: 0, submitted: 0, overdue: 0, late: 0 } } =
+    useTaskSummary(activeWorkspace?._id, { enabled: !!activeWorkspace?._id });
+
+  const { data: submissionsRes } = useQuery({
+    queryKey: ['submissions', 'my'],
+    queryFn:  fetchMySubmissions,
+    select:   (res) => res.data || [],
+  });
+  const submissions = submissionsRes || [];
 
   const { activities = [] } = useSocket(activeWorkspace?._id);
-
-  // ── Load workspaces ─────────────────────────────────────────────────────────
-  const fetchWorkspaces = useCallback(async () => {
-    setLoading(true);
-    setLoadError(null);
-    try {
-      const res = await api.get('/api/classes');
-      setWorkspaces(res.data.data || []);
-    } catch (err) {
-      setLoadError(err.response?.data?.message || 'Failed to load classes.');
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  useEffect(() => { fetchWorkspaces(); }, [fetchWorkspaces]);
 
   // ── Auto-select first workspace ─────────────────────────────────────────────
   useEffect(() => {
@@ -69,79 +72,62 @@ function StudentDashboard() {
     }
   }, [workspaces, activeWorkspace]);
 
-  // ── Load workspace data ─────────────────────────────────────────────────────
-  const loadWorkspaceData = useCallback(async (cls) => {
-    if (!cls?._id) return;
-    setTasksLoading(true);
-    try {
-      const [tRes, sRes, sumRes] = await Promise.all([
-        fetchTasks({ classId: cls._id }),
-        fetchMySubmissions(),
-        fetchTaskSummary(cls._id),
-      ]);
-      setTasks(tRes?.data || []);
-      setSubmissions(sRes?.data || []);
-      setSummary(sumRes?.data || { pending: 0, submitted: 0, overdue: 0, late: 0 });
-    } catch (err) {
-      showToast(err.response?.data?.message || 'Failed to load workspace data.', 'error');
-    } finally {
-      setTasksLoading(false);
-    }
-  }, [showToast]);
-
-  useEffect(() => {
-    if (activeWorkspace?._id) loadWorkspaceData(activeWorkspace);
-  }, [activeWorkspace?._id, loadWorkspaceData]);
+  // Reset page when workspace changes
+  useEffect(() => { setPage(1); }, [activeWorkspace?._id]);
 
   // ── Join class ──────────────────────────────────────────────────────────────
+  const [code, setCode] = useState('');
   const handleJoin = async (e) => {
     e.preventDefault();
-    if (!code.trim() || joining) return;
-    setJoining(true);
+    if (!code.trim()) return;
     try {
-      const res = await api.post('/api/classes/join', { code: code.trim() });
-      const workspace = res.data.data;
-      setWorkspaces(prev =>
-        prev.some(w => w._id === workspace._id) ? prev : [...prev, workspace]
-      );
+      const joined = await joinMutation.mutateAsync(code.trim().toUpperCase());
       setCode('');
-      setActiveWorkspace(workspace);
-      showToast(`Joined "${workspace.name}" successfully!`);
+      setActiveWorkspace(joined);
+      showToast(`Joined "${joined.name}" successfully!`);
     } catch (err) {
       showToast(err.response?.data?.message || 'Join failed. Check the code.', 'error');
-    } finally {
-      setJoining(false);
     }
   };
 
-  const getSubmission = (taskId) =>
-    submissions.find(s => String(s.taskId?._id || s.taskId) === String(taskId));
+  const getSubmission = useCallback(
+    (taskId) => submissions.find(s => String(s.taskId?._id || s.taskId) === String(taskId)),
+    [submissions]
+  );
 
   const handleSubmitSuccess = () => {
     showToast('Submission successful! ✅');
     setActiveTask(null);
-    if (activeWorkspace?._id) loadWorkspaceData(activeWorkspace);
   };
 
-  // ── Analytics ───────────────────────────────────────────────────────────────
-  const total     = summary.pending + summary.submitted + summary.overdue + summary.late;
-  const completed = summary.submitted + summary.late;
-  const completionPct = total > 0 ? Math.round((completed / total) * 100) : 0;
-  const onTimePct     = completed > 0 ? Math.round((summary.submitted / completed) * 100) : 0;
+  // ── Analytics (memoized) ────────────────────────────────────────────────────
+  const analytics = useMemo(() => {
+    const total     = summary.pending + summary.submitted + summary.overdue + summary.late;
+    const completed = summary.submitted + summary.late;
+    return {
+      total,
+      completed,
+      completionPct: total > 0 ? Math.round((completed / total) * 100) : 0,
+      onTimePct:     completed > 0 ? Math.round((summary.submitted / completed) * 100) : 0,
+    };
+  }, [summary]);
 
-  // ── Filtered tasks ──────────────────────────────────────────────────────────
-  const filteredTasks = tasks
-    .filter(task => {
-      const sub    = getSubmission(task._id);
-      const status = getTaskStatus(task, sub);
-      return filterStatus === 'all' || status === filterStatus;
-    })
-    .filter(task =>
-      !searchQuery || task.title.toLowerCase().includes(searchQuery.toLowerCase())
-    );
+  // ── Filtered tasks (memoized) ───────────────────────────────────────────────
+  const filteredTasks = useMemo(() =>
+    tasks
+      .filter(task => {
+        const sub    = getSubmission(task._id);
+        const status = getTaskStatus(task, sub);
+        return filterStatus === 'all' || status === filterStatus;
+      })
+      .filter(task =>
+        !searchQuery || task.title.toLowerCase().includes(searchQuery.toLowerCase())
+      ),
+    [tasks, filterStatus, searchQuery, getSubmission]
+  );
 
   // ── Loading state ───────────────────────────────────────────────────────────
-  if (loading) return (
+  if (classesLoading) return (
     <Layout>
       <div className="mb-6">
         <div className="animate-pulse bg-white/10 rounded h-7 w-48 mb-2" />
@@ -152,9 +138,12 @@ function StudentDashboard() {
   );
 
   // ── Error state ─────────────────────────────────────────────────────────────
-  if (loadError) return (
+  if (classesError) return (
     <Layout>
-      <ErrorState message={loadError} onRetry={fetchWorkspaces} />
+      <ErrorState
+        message={classesErr?.response?.data?.message || 'Failed to load classes.'}
+        onRetry={refetchClasses}
+      />
     </Layout>
   );
 
@@ -169,8 +158,7 @@ function StudentDashboard() {
         </h1>
         <p className="text-sm text-gray-400 mt-1">
           {summary.pending} pending · {workspaces.length} classes
-        </p>
-      </div>
+        </p>      </div>
 
       {/* MAIN GRID */}
       <div className="grid grid-cols-3 gap-6">
@@ -184,7 +172,7 @@ function StudentDashboard() {
               { icon: <Clock size={20} className="text-amber-400" />,    label: 'Pending',         value: summary.pending   },
               { icon: <CheckCircle2 size={20} className="text-emerald-400" />, label: 'Completed',  value: summary.submitted },
               { icon: <AlertCircle size={20} className="text-rose-400" />,label: 'Overdue',         value: summary.overdue   },
-              { icon: <TrendingUp size={20} className="text-blue-400" />, label: 'Completion Rate', value: total > 0 ? `${completionPct}%` : '--' },
+              { icon: <TrendingUp size={20} className="text-blue-400" />, label: 'Completion Rate', value: analytics.total > 0 ? `${analytics.completionPct}%` : '--' },
             ].map(({ icon, label, value }) => (
               <div key={label} className="bg-white/5 backdrop-blur-md border border-white/10 rounded-xl p-4 flex justify-between items-center hover:border-white/20 transition-all">
                 <div>
@@ -207,29 +195,29 @@ function StudentDashboard() {
               <div className="col-span-2 space-y-3">
                 <div className="flex justify-between text-xs text-gray-400 mb-1">
                   <span>Overall Completion</span>
-                  <span className="text-white font-semibold">{completionPct}%</span>
+                  <span className="text-white font-semibold">{analytics.completionPct}%</span>
                 </div>
                 <div className="h-2 bg-white/10 rounded-full overflow-hidden">
                   <div
                     className="h-full bg-gradient-to-r from-purple-500 to-pink-500 rounded-full transition-all duration-700"
-                    style={{ width: `${completionPct}%` }}
+                    style={{ width: `${analytics.completionPct}%` }}
                   />
                 </div>
                 <div className="flex justify-between text-xs text-gray-400 mb-1">
                   <span>On-time Rate</span>
-                  <span className="text-white font-semibold">{onTimePct}%</span>
+                  <span className="text-white font-semibold">{analytics.onTimePct}%</span>
                 </div>
                 <div className="h-2 bg-white/10 rounded-full overflow-hidden">
                   <div
                     className="h-full bg-gradient-to-r from-emerald-500 to-teal-500 rounded-full transition-all duration-700"
-                    style={{ width: `${onTimePct}%` }}
+                    style={{ width: `${analytics.onTimePct}%` }}
                   />
                 </div>
               </div>
               {/* Streak / summary */}
               <div className="bg-white/5 rounded-xl p-3 border border-white/10 flex flex-col items-center justify-center gap-1">
                 <Flame size={22} className="text-orange-400" />
-                <p className="text-2xl font-bold">{completed}</p>
+                <p className="text-2xl font-bold">{analytics.completed}</p>
                 <p className="text-[10px] text-gray-400 text-center">Tasks Done</p>
               </div>
             </div>
@@ -284,8 +272,14 @@ function StudentDashboard() {
               </div>
             )}
 
-            {/* Loading skeleton */}
-            {tasksLoading ? (
+            {/* Pagination */}
+            <Pagination
+              page={page}
+              totalPages={totalPages}
+              total={totalTasks}
+              limit={20}
+              onPageChange={setPage}
+            />
               <div className="space-y-3">
                 {[...Array(3)].map((_, i) => (
                   <div key={i} className="bg-white/5 border border-white/10 rounded-lg p-4 flex items-center gap-4">
@@ -355,6 +349,15 @@ function StudentDashboard() {
                 })}
               </div>
             )}
+
+            {/* Pagination */}
+            <Pagination
+              page={page}
+              totalPages={totalPages}
+              total={totalTasks}
+              limit={20}
+              onPageChange={setPage}
+            />
           </div>
         </div>
 
@@ -375,10 +378,10 @@ function StudentDashboard() {
               />
               <button
                 type="submit"
-                disabled={joining || !code.trim()}
+                disabled={joinMutation.isPending || !code.trim()}
                 className="w-full h-11 bg-gradient-to-r from-purple-500 to-pink-500 rounded-lg text-white font-medium hover:opacity-90 active:scale-[0.98] transition-all disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                {joining ? 'Joining...' : 'Join Class'}
+                {joinMutation.isPending ? 'Joining...' : 'Join Class'}
               </button>
             </form>
           </div>
@@ -426,16 +429,9 @@ function StudentDashboard() {
             )}
           </div>
 
-          {/* LIVE ACTIVITY */}
-          <div className="bg-white/5 backdrop-blur-md border border-white/10 rounded-xl p-5 hover:border-white/20 transition-all min-h-[120px]">
-            <h3 className="text-sm font-medium mb-3">Live Activity</h3>
-            {activities.length === 0 ? (
-              <div className="text-center text-gray-400 py-6">
-                <p className="text-sm">No recent activity</p>
-              </div>
-            ) : (
-              <LiveActivityPanel activities={activities} />
-            )}
+          {/* ACTIVITY FEED */}
+          <div className="bg-white/5 backdrop-blur-md border border-white/10 rounded-xl p-5 hover:border-white/20 transition-all">
+            <ActivityFeed limit={8} />
           </div>
         </div>
       </div>

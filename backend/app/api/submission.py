@@ -12,27 +12,45 @@ from app.utils.responses import ok
 router = APIRouter(prefix="/submissions", tags=["Submissions"])
 
 
-# ── Student: submit or resubmit a task ───────────────────────────────────────
-@router.post("", summary="Submit a task (student only)", status_code=201)
+@router.post(
+    "",
+    summary="Submit an assignment (student only)",
+    description=(
+        "Creates or updates a submission for a task. "
+        "Accepts either a text body or a file upload (multipart/form-data). "
+        "Triggers AI feedback analysis as a background task after submission."
+    ),
+    status_code=201,
+    responses={
+        201: {"description": "Created submission object"},
+        403: {"description": "Teacher role cannot submit assignments"},
+        404: {"description": "Task not found or not assigned to this student"},
+    },
+)
 async def submit_task(
     background_tasks: BackgroundTasks,
-    taskId:         str            = Form(...),
-    textSubmission: Optional[str]  = Form(None),
-    file:           Optional[UploadFile] = File(None),
-    user:           dict           = Depends(require_student),
+    taskId:           str                   = Form(...,  description="ID of the task being submitted"),
+    textSubmission:   Optional[str]         = Form(None, description="Text content of the submission"),
+    file:             Optional[UploadFile]  = File(None, description="File attachment (PDF, DOCX, etc.)"),
+    user:             dict                  = Depends(require_student),
 ):
     db  = get_db()
     sub = await submission_service.submit_task(taskId, textSubmission, file, user, db)
-    
-    # Trigger AI analysis in background
     if sub and sub.get("id"):
         background_tasks.add_task(ai_service.analyze_submission, sub["id"], db)
-        
     return ok(sub, status=201)
 
 
-# ── Teacher: view all submissions for a task ──────────────────────────────────
-@router.get("/task/{task_id}", summary="Get submissions for a task (teacher only)")
+@router.get(
+    "/task/{task_id}",
+    summary="Get submissions for a task (teacher only)",
+    description="Returns all student submissions for a specific task, including AI feedback if available.",
+    responses={
+        200: {"description": "List of submission objects"},
+        403: {"description": "Student role cannot view all submissions"},
+        404: {"description": "Task not found"},
+    },
+)
 async def get_submissions_for_task(
     task_id: str,
     user:    dict = Depends(require_teacher),
@@ -42,16 +60,33 @@ async def get_submissions_for_task(
     return ok(subs)
 
 
-# ── Student: view own submissions ─────────────────────────────────────────────
-@router.get("/my", summary="Get my submissions (student only)")
+@router.get(
+    "/my",
+    summary="Get my submissions (student only)",
+    description="Returns all submissions made by the authenticated student across all tasks.",
+    responses={
+        200: {"description": "List of submission objects"},
+        403: {"description": "Teacher role cannot access this endpoint"},
+    },
+)
 async def get_my_submissions(user: dict = Depends(require_student)):
     db   = get_db()
     subs = await submission_service.get_my_submissions(user, db)
     return ok(subs)
 
 
-# ── Teacher: class-level analytics ───────────────────────────────────────────
-@router.get("/analytics/class/{class_id}", summary="Class analytics (teacher only)")
+@router.get(
+    "/analytics/class/{class_id}",
+    summary="Class-level submission analytics (teacher only)",
+    description=(
+        "Returns per-task analytics for a class: submission counts, late counts, "
+        "average AI scores, and pending counts."
+    ),
+    responses={
+        200: {"description": "Analytics object keyed by task ID"},
+        403: {"description": "Student role cannot access class analytics"},
+    },
+)
 async def get_class_analytics(
     class_id: str,
     user:     dict = Depends(require_teacher),
@@ -61,16 +96,30 @@ async def get_class_analytics(
     return ok(data)
 
 
-# ── Student: own analytics ────────────────────────────────────────────────────
-@router.get("/analytics/student", summary="Student analytics (student only)")
+@router.get(
+    "/analytics/student",
+    summary="Student's own analytics (student only)",
+    description="Returns the authenticated student's submission history, on-time rate, and AI score trends.",
+    responses={
+        200: {"description": "Student analytics object"},
+        403: {"description": "Teacher role cannot access this endpoint"},
+    },
+)
 async def get_student_analytics(user: dict = Depends(require_student)):
     db   = get_db()
     data = await submission_service.get_student_analytics(user, db)
     return ok(data)
 
 
-# ── Student: deadline reminders ───────────────────────────────────────────────
-@router.get("/reminders", summary="Deadline reminders (student only)")
+@router.get(
+    "/reminders",
+    summary="Upcoming deadline reminders (student only)",
+    description="Returns tasks due within the next 48 hours that the student has not yet submitted.",
+    responses={
+        200: {"description": "List of upcoming task objects"},
+        403: {"description": "Teacher role cannot access this endpoint"},
+    },
+)
 async def get_reminders(user: dict = Depends(require_student)):
     db   = get_db()
     data = await submission_service.get_reminders(user, db)
