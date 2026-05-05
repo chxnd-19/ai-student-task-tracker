@@ -18,6 +18,16 @@ def to_str(oid: Any) -> str:
     return str(oid) if isinstance(oid, ObjectId) else oid
 
 
+def to_object_id(oid: Any) -> ObjectId:
+    """Convert string to ObjectId. Returns input if already an ObjectId."""
+    if isinstance(oid, ObjectId):
+        return oid
+    try:
+        return ObjectId(str(oid))
+    except Exception:
+        raise ValueError(f"Invalid ObjectId format: {oid}")
+
+
 def _convert_value(value: Any) -> Any:
     """Convert a single value to a JSON-safe type."""
     if isinstance(value, ObjectId):

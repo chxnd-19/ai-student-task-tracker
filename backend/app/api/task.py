@@ -7,10 +7,10 @@ from typing import Optional
 from app.services import task_service
 from app.database.connection import get_db
 from app.utils.dependencies import get_current_user, require_teacher, require_student
-from app.utils.responses import ok, ok_msg, ok_page, fail
+from app.utils.responses import ok, ok_list, ok_msg, ok_page, fail
 from app.schemas.task import TaskCreate, TaskUpdate
 
-router = APIRouter(prefix="/api/tasks", tags=["Tasks"])
+router = APIRouter(prefix="/tasks", tags=["Tasks"])
 
 
 # ── Teacher: list tasks (with optional classId filter) ────────────────────────
@@ -44,10 +44,13 @@ async def get_task_summary(
 
 # ── Teacher: list all students ────────────────────────────────────────────────
 @router.get("/students", summary="List all students (teacher only)")
-async def get_students(user: dict = Depends(require_teacher)):
+async def get_students(
+    workspaceId: Optional[str] = Query(None),
+    user:        dict          = Depends(require_teacher),
+):
     db       = get_db()
-    students = await task_service.get_students(db)
-    return ok(students)
+    students = await task_service.get_students(db, workspaceId)
+    return ok_list(students)
 
 
 # ── Teacher: view one student's profile + stats ───────────────────────────────
@@ -79,6 +82,7 @@ async def create_task(
     user:    dict = Depends(require_teacher),
 ):
     db   = get_db()
+    print(f"[TASK CREATE] USER: {user['email']} DATA: {payload}")
     task = await task_service.create_task(payload, user, db)
     return ok(task, status=201)
 

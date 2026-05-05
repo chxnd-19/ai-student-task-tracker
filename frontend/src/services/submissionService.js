@@ -1,36 +1,67 @@
 import api from './api';
 
-const BASE = '/submissions';
+const BASE = 'submissions';
 
-/**
- * submitTask — student submits text or PDF file.
- * Uses FormData so multer can parse the file on the backend.
- */
-export const submitTask = (taskId, textSubmission, file) => {
-  const form = new FormData();
-  form.append('taskId', taskId);
-  if (textSubmission) form.append('textSubmission', textSubmission);
-  if (file)           form.append('file', file);
-  return api.post(BASE, form, { headers: { 'Content-Type': 'multipart/form-data' } })
-            .then((r) => ({ data: r.data.data }));
+export const submitTask = async (taskId, textSubmission, file) => {
+  try {
+    const form = new FormData();
+    form.append('taskId', taskId);
+    if (textSubmission) form.append('textSubmission', textSubmission);
+    if (file)           form.append('file', file);
+    const res = await api.post(BASE, form, { headers: { 'Content-Type': 'multipart/form-data' } });
+    return { data: res.data.data };
+  } catch (err) {
+    console.error("API ERROR:", err.response?.data || err.message);
+    throw err;
+  }
 };
 
-// Teacher: all submissions for a task
-export const fetchSubmissionsForTask = (taskId) =>
-  api.get(`${BASE}/task/${taskId}`).then((r) => ({ data: r.data.data }));
+export const fetchSubmissionsForTask = async (taskId) => {
+  try {
+    const res = await api.get(`${BASE}/task/${taskId}`);
+    return { data: res.data.data };
+  } catch (err) {
+    console.error("API ERROR:", err.response?.data || err.message);
+    throw err;
+  }
+};
 
-// Student: own submissions
-export const fetchMySubmissions = () =>
-  api.get(`${BASE}/my`).then((r) => ({ data: r.data.data }));
+export const fetchMySubmissions = async () => {
+  try {
+    const res = await api.get(`${BASE}/my`);
+    return { data: res.data.data };
+  } catch (err) {
+    console.error("API ERROR:", err.response?.data || err.message);
+    throw err;
+  }
+};
 
-// Teacher: analytics for a class
-export const fetchClassAnalytics = (classId) =>
-  api.get(`${BASE}/analytics/class/${classId}`).then((r) => ({ data: r.data.data }));
+export const fetchClassAnalytics = async (classId) => {
+  try {
+    const res = await api.get(`${BASE}/analytics/class/${classId}`);
+    return { data: res.data.data };
+  } catch (err) {
+    console.error("API ERROR:", err.response?.data || err.message);
+    throw err;
+  }
+};
 
-// Student: own analytics summary
-export const fetchStudentAnalytics = () =>
-  api.get(`${BASE}/analytics/student`).then((r) => ({ data: r.data.data }));
+export const fetchStudentAnalytics = async () => {
+  try {
+    const res = await api.get(`${BASE}/analytics/student`);
+    return { data: res.data.data };
+  } catch (err) {
+    console.error("API ERROR:", err.response?.data || err.message);
+    throw err;
+  }
+};
 
-// Student: smart deadline reminders
-export const fetchReminders = () =>
-  api.get(`${BASE}/reminders`).then((r) => ({ data: r.data.data }));
+export const fetchReminders = async () => {
+  try {
+    const res = await api.get(`${BASE}/reminders`);
+    return { data: res.data.data };
+  } catch (err) {
+    console.error("API ERROR:", err.response?.data || err.message);
+    throw err;
+  }
+};

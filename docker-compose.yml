@@ -31,7 +31,7 @@ services:
     container_name: stt_backend
     restart: unless-stopped
     ports:
-      - "8000:8000"            # direct access for debugging; Nginx is the real entry point
+      - "5000:5000"            # direct access for debugging; Nginx is the real entry point
     environment:
       # MongoDB — use the Docker service name, not localhost
       MONGO_URI: "mongodb://mongodb:27017/student-task-tracker"
@@ -41,8 +41,8 @@ services:
       # CORS — Nginx is the public entry point on port 80
       FRONTEND_URL: "http://localhost"
       # Production mode: WARNING logs, restricted CORS
-      ENVIRONMENT: "production"
-      PORT: "8000"
+      ENVIRONMENT: "development"
+      PORT: "5000"
       UPLOAD_DIR: "uploads"
     volumes:
       # Persist uploaded files across container restarts
@@ -52,7 +52,7 @@ services:
         condition: service_healthy
     healthcheck:
       test: ["CMD", "python", "-c",
-             "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/health')"]
+             "import urllib.request; urllib.request.urlopen('http://localhost:5000/api/health')"]
       interval: 15s
       timeout: 5s
       retries: 3

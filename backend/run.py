@@ -1,17 +1,20 @@
 """
-Convenience startup script.
-Run: python run.py
+Startup script — python run.py
+Uses python -m uvicorn so it works regardless of whether
+uvicorn is on the system PATH.
 """
-import uvicorn
+import subprocess
+import sys
 from app.config.settings import get_settings
 
 settings = get_settings()
 
 if __name__ == "__main__":
-    uvicorn.run(
+    subprocess.run([
+        sys.executable, "-m", "uvicorn",
         "app.main:app",
-        host="0.0.0.0",
-        port=settings.PORT,
-        reload=(settings.ENVIRONMENT == "development"),
-        log_level="info",
-    )
+        "--host", "localhost",
+        "--port", str(settings.PORT),
+        "--reload",
+        "--log-level", "info",
+    ])

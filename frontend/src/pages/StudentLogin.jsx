@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useNavigate, Link, useSearchParams } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { login, saveToken } from '../services/authService';
+import { login, saveAuthData } from '../services/authService';
 import Spinner from '../components/Spinner';
 import GlassCard from '../components/GlassCard';
 import { parseError } from '../utils/errorParser';
@@ -34,9 +34,9 @@ function StudentLogin({ onLogin }) {
     setError('');
     setLoading(true);
     try {
-      const { data: res } = await login({ ...form, role: 'student' });
-      saveToken(res.data.token);
-      onLogin(res.data);
+      const response = await login({ ...form, role: 'student' });
+      saveAuthData(response.token, response.user);
+      onLogin(response.user);
       window.scrollTo(0, 0);
       navigate('/');
     } catch (err) {
@@ -98,7 +98,7 @@ function StudentLogin({ onLogin }) {
         </form>
 
         <div className="mt-10 pt-8 border-t border-border space-y-4 text-center">
-          <p className="text-sm text-muted">Are you an instructor? <Link to="/login/teacher" className="text-primary font-bold hover:underline">Instructor Portal</Link></p>
+          <p className="text-sm text-muted">Are you a teacher? <Link to="/login/teacher" className="text-primary font-bold hover:underline">Teacher Portal</Link></p>
           <p className="text-sm text-muted">New student? <Link to="/signup" className="text-primary font-bold hover:underline">Create account</Link></p>
         </div>
       </GlassCard>

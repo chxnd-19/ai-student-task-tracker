@@ -1,179 +1,256 @@
-# 🎓 Student Task Tracker
+# Student Task Tracker
 
-[![Python](https://img.shields.io/badge/Python-3.11-blue.svg)](https://www.python.org/)
-[![FastAPI](https://img.shields.io/badge/FastAPI-0.111-009688.svg)](https://fastapi.tiangolo.com/)
-[![React](https://img.shields.io/badge/React-18.3-61DAFB.svg)](https://reactjs.org/)
-[![Docker](https://img.shields.io/badge/Docker-Enabled-2496ED.svg)](https://www.docker.com/)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+A full-stack web application for managing student assignments and submissions with role-based access control.
 
-A premium, production-grade SaaS dashboard for managing student assignments, automated submissions, and class-level analytics. Built with a focus on **security**, **observability**, and **performance**.
+## Features
 
----
+### Authentication & Authorization
+- **Secure JWT-based authentication** with role-based access (Student / Instructor)
+- **Forgot password system** with reset link generation (development mode — link shown in UI)
+- **Role-specific dashboards** with tailored views for students and instructors
 
-## 🏛️ Architecture Overview
+### Student Features
+- View assigned tasks with due dates and status tracking
+- Submit assignments with text and file uploads
+- Track submission history and completion rates
+- Real-time notifications for new assignments and feedback
+- Personal analytics dashboard
 
-The system follows a modern microservices-lite architecture designed for scalability and clean separation of concerns:
+### Instructor Features
+- Create and manage classes with unique join codes
+- Assign tasks to students with deadlines and descriptions
+- Review student submissions and provide feedback
+- Class-level analytics and progress tracking
+- Student performance monitoring
 
-```text
-[ Client ] <---> [ Nginx Reverse Proxy ]
-                        |
-        +---------------+---------------+
-        |               |               |
- [ React SPA ]   [ FastAPI App ]  [ Flask Service ]
- (Frontend)      (Primary API)    (ML Analytics)
-        |               |               |
-        +---------------+---------------+
-                        |
-                [ MongoDB Database ]
-```
-
----
-
-## ✨ Key Features
-
-- **🚀 Modern SaaS UI**: Premium dark-mode interface with glassmorphism and Framer Motion spring animations.
-- **🛡️ Hardened Security**: Environment-aware rate limiting, JWT authentication, and proxy-aware IP detection.
-- **📊 Real-time Analytics**: Specialized Flask microservice for calculating student performance and class trends.
-- **🕵️ Observability**: Full Prometheus & Grafana stack with custom invariant self-verification and anomaly detection.
-- **📂 File Management**: Robust assignment submission system with automated file storage and status tracking.
-- **🔔 Notification System**: Integrated event-based notifications for deadlines, grades, and class updates.
+### Technical Features
+- **Real-time updates** via Socket.IO
+- **AI-powered feedback** (simulated) for submissions
+- **Responsive UI** with glassmorphism design
+- **MongoDB** for data persistence
+- **FastAPI** backend with async support
+- **React** frontend with Vite
 
 ---
 
-## 📂 Project Structure
+## Tech Stack
 
-```
-student-task-tracker/
-├── frontend/               # React + Vite (TailwindCSS, Framer Motion)
-├── backend/                # FastAPI — Primary Backend Service
-│   ├── app/                # Core application logic
-│   ├── Dockerfile          # Optimized multi-stage build
-│   └── .env.example        # Configuration template
-├── flask_service/          # Flask — Analytics & Notifications Microservice
-├── monitoring/             # Prometheus configuration
-├── nginx/                  # Nginx — Reverse Proxy & Static Assets
-└── docker-compose.yml      # Full-stack orchestration
-```
+### Frontend
+- **React 18** with React Router
+- **Vite** for fast development and builds
+- **Tailwind CSS** for styling
+- **Framer Motion** for animations
+- **Axios** for API calls
+- **Lucide React** for icons
+
+### Backend
+- **FastAPI** (Python 3.13+)
+- **MongoDB** with Motor (async driver)
+- **JWT** for authentication
+- **Socket.IO** for real-time features
+- **Bcrypt** for password hashing
+- **Pydantic** for data validation
 
 ---
 
-## 🚀 Quick Start (Docker)
+## Setup Instructions
 
-The entire stack can be launched in production mode with a single command:
+### Prerequisites
+- **Node.js** 18+ and npm
+- **Python** 3.13+
+- **MongoDB** (local or Atlas)
 
+### 1. Clone the Repository
 ```bash
-# 1. Clone the repository
 git clone https://github.com/yourusername/student-task-tracker.git
 cd student-task-tracker
-
-# 2. Start the services
-docker-compose up --build
 ```
 
-### Accessing the Services
-- **Frontend**: [http://localhost](http://localhost)
-- **API Documentation**: [http://localhost/docs](http://localhost/docs)
-- **Prometheus UI**: [http://localhost:9090](http://localhost:9090)
-- **Grafana Dashboards**: [http://localhost:3001](http://localhost:3001) (`admin` / `admin`)
+### 2. Backend Setup
 
----
-
-## 🛰️ API Routing Rules (The Contract)
-
-To ensure consistency across Docker and Production environments, the system follows a strict **Same-Origin Policy** via Nginx:
-
-1.  **Frontend Calls**: All requests must use the relative `/api` prefix (handled automatically by `services/api.js`).
-2.  **No Hardcoded URLs**: Never use `localhost:8000`, `127.0.0.1`, or `http://` in frontend services.
-3.  **Routing Path**: `Frontend (/api) ──> Nginx (/api) ──> Backend (/api)`.
-4.  **Why?**: This prevents CORS issues, simplifies environment configuration, and makes the system fully portable.
-
----
-
-## 🛡️ API Contract Enforcement
-
-The communication rules are automatically enforced via a static analysis script. Violations (like hardcoded URLs or direct HTTP calls) will fail the validation check.
-
-### Run Validation Locally
-```bash
-cd frontend
-npm run validate:api
-```
-
----
-
-## 🛡️ Pre-Commit Validation
-
-To prevent architectural regressions, an automated git hook runs before every commit. This hook executes the API contract validator and will **block the commit** if any violations are found.
-
-- **Emergency Bypass**: Use `git commit -m "..." --no-verify` (Only for emergency use).
-- **Rule**: Never bypass this check to fix a "broken build"; fix the underlying API routing instead.
-
----
-
-## ❓ If Your Commit is Blocked
-
-The pre-commit hook is designed to protect the system's architecture. If your commit is blocked:
-
-1.  **Check the Output**: The terminal will show the exact file and line causing the violation.
-2.  **Fix the Issue**: Most common fixes:
-    *   Remove `/api` from your service file (it's already handled by `baseURL`).
-    *   Move any direct `axios` or `fetch` calls into `services/api.js`.
-    *   Remove hardcoded URLs like `localhost:8000`.
-3.  **Retry**: Once fixed, `git add` the changes and try the commit again.
-
----
-
-## 🔖 Versioning Strategy
-
-This project follows [Semantic Versioning (SemVer)](https://semver.org/):
-- **MAJOR**: Breaking changes or structural architectural shifts.
-- **MINOR**: New features or significant functional additions.
-- **PATCH**: Bug fixes, security hardening, or documentation updates.
-
-**Release Flow**:
-1.  Complete work and update `CHANGELOG.md`.
-2.  Pass the **[Release Checklist](RELEASE_CHECKLIST.md)**.
-3.  Tag the release: `git tag -a v1.0.0 -m "Release description"`.
-
----
-
-## 🛠️ Developer Setup (Manual)
-
-### Backend (FastAPI)
 ```bash
 cd backend
-python -m venv venv
-source venv/bin/activate  # venv\Scripts\activate on Windows
+
+# Create virtual environment
+python -m venv .venv
+
+# Activate virtual environment
+# Windows:
+.venv\Scripts\activate
+# macOS/Linux:
+source .venv/bin/activate
+
+# Install dependencies
 pip install -r requirements.txt
+
+# Configure environment
+cp .env.example .env
+# Edit .env with your MongoDB URI and JWT secret
+
+# Run the server
 python run.py
 ```
 
-### Frontend (React)
+Backend will start on `http://localhost:5000`
+
+### 3. Frontend Setup
+
 ```bash
 cd frontend
+
+# Install dependencies
 npm install
+
+# Configure environment (optional)
+cp .env.example .env.development
+
+# Run development server
 npm run dev
+```
+
+Frontend will start on `http://localhost:3000`
+
+---
+
+## Environment Variables
+
+### Backend (`.env`)
+```env
+MONGO_URI=mongodb://localhost:27017/taskdb
+DB_NAME=taskdb
+JWT_SECRET=your_secure_random_string_here
+PORT=5000
+ENVIRONMENT=development
+FRONTEND_URL=http://localhost:3000
+```
+
+### Frontend (`.env.development`)
+```env
+VITE_API_URL=http://localhost:5000
 ```
 
 ---
 
-## 📈 Monitoring & Health
+## Project Structure
 
-The system continuously monitors its own integrity via custom invariant checks:
-- **Health Probe**: `GET /api/health` returns status, DB connectivity, and environment validation.
-- **Deep Self-Check**: `GET /api/system/self-check` verifies internal state (Teacher only).
-- **Metrics**: Production metrics are exported to Prometheus at `/metrics`.
+```
+student-task-tracker/
+├── backend/
+│   ├── app/
+│   │   ├── api/           # Legacy API routes
+│   │   ├── routes/        # Clean auth routes
+│   │   ├── services/      # Business logic
+│   │   ├── schemas/       # Pydantic models
+│   │   ├── utils/         # Helpers (JWT, password, etc.)
+│   │   ├── database/      # MongoDB connection
+│   │   └── main.py        # FastAPI app entry point
+│   ├── run.py             # Server startup script
+│   └── requirements.txt   # Python dependencies
+│
+├── frontend/
+│   ├── src/
+│   │   ├── components/    # Reusable UI components
+│   │   ├── pages/         # Route pages
+│   │   ├── services/      # API client
+│   │   ├── context/       # React context (auth)
+│   │   └── App.jsx        # Main app component
+│   ├── package.json       # Node dependencies
+│   └── vite.config.js     # Vite configuration
+│
+└── README.md
+```
 
 ---
 
-## 🗺️ Roadmap
+## API Endpoints
 
-- [ ] **Real-time Collaboration**: Live chat and shared document editing using WebSockets.
-- [ ] **AI Grading**: Integration with LLMs for automated feedback on submissions.
-- [ ] **Mobile App**: Dedicated React Native application for student reminders.
+### Authentication
+- `POST /api/auth/signup` — Register new user
+- `POST /api/auth/login` — Login with email/password
+- `POST /api/auth/forgot-password` — Generate password reset link
+- `POST /api/auth/reset-password/{token}` — Reset password with token
+
+### Classes (Workspaces)
+- `GET /api/classes` — Get user's classes
+- `POST /api/classes` — Create new class (instructor only)
+- `POST /api/classes/join` — Join class with code (student only)
+
+### Tasks
+- `GET /api/tasks` — List tasks
+- `POST /api/tasks` — Create task (instructor only)
+- `GET /api/tasks/{id}` — Get task details
+- `PUT /api/tasks/{id}` — Update task (instructor only)
+- `DELETE /api/tasks/{id}` — Delete task (instructor only)
+
+### Submissions
+- `POST /api/submissions` — Submit assignment (student only)
+- `GET /api/submissions/my` — Get own submissions (student only)
+- `GET /api/submissions/task/{task_id}` — Get task submissions (instructor only)
 
 ---
 
-## ⚖️ License
+## Development Notes
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+### Forgot Password Flow (Development Mode)
+- When a user requests a password reset, the backend generates a secure token
+- **In development**, the reset link is displayed directly in the UI (no email sent)
+- Click "Open Reset Page" to navigate to the reset form
+- **In production**, integrate an email service (SendGrid, AWS SES, etc.)
+
+### Database Stability
+- The app **always starts** even if MongoDB is unavailable
+- Routes return `503 Service Unavailable` if DB is down
+- No import-time side effects — all DB calls are inside route handlers
+
+### Testing Accounts
+Create test accounts via the signup page:
+- **Instructor**: Use role "Instructor" during signup
+- **Student**: Use role "Student" during signup
+
+---
+
+## Scripts
+
+### Backend
+```bash
+python run.py              # Start server
+python -m pytest           # Run tests (if configured)
+```
+
+### Frontend
+```bash
+npm run dev                # Development server
+npm run build              # Production build
+npm run preview            # Preview production build
+npm run lint               # Run ESLint
+```
+
+---
+
+## Contributing
+
+1. Fork the repository
+2. Create a feature branch (`git checkout -b feature/amazing-feature`)
+3. Commit your changes (`git commit -m 'feat: add amazing feature'`)
+4. Push to the branch (`git push origin feature/amazing-feature`)
+5. Open a Pull Request
+
+---
+
+## License
+
+This project is licensed under the MIT License — see the [LICENSE](LICENSE) file for details.
+
+---
+
+## Acknowledgments
+
+- Built with FastAPI and React
+- UI inspired by modern SaaS dashboards (Vercel, Linear)
+- Glassmorphism design trend
+
+---
+
+## Support
+
+For issues or questions, please open an issue on GitHub.

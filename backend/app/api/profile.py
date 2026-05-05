@@ -9,7 +9,7 @@ from app.database.connection import get_db
 from app.utils.dependencies import get_current_user
 from app.utils.responses import ok
 
-router = APIRouter(prefix="/api/profile", tags=["Profile"])
+router = APIRouter(prefix="/profile", tags=["Profile"])
 
 
 @router.get("", summary="Get current user's profile")

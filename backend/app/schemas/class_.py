@@ -8,12 +8,12 @@ from pydantic import BaseModel
 
 class ClassCreate(BaseModel):
     name: str
-    subject: str
+    subject: str = "General"
     description: str = ""
 
 
 class JoinClassRequest(BaseModel):
-    joinCode: str
+    code: str
 
 
 class ClassOut(BaseModel):

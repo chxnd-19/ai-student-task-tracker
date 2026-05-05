@@ -1,35 +1,27 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useNavigate, Link, useSearchParams } from 'react-router-dom';
-import { login, saveToken } from '../services/authService';
+import { login, saveAuthData } from '../services/authService';
 import Spinner from '../components/Spinner';
+import { motion } from 'framer-motion';
+import { Sparkles, Mail, Lock, ArrowRight, User, GraduationCap } from 'lucide-react';
 
-/**
- * Login page — authenticates an existing user and stores the JWT token.
- *
- * Reads ?reason= from the URL (set by the axios interceptor on 401).
- * The reason is sanitized (HTML stripped, length capped) before rendering.
- * The query param is cleared from the URL after the first render so it
- * doesn't persist on refresh or back-navigation.
- */
 function Login({ onLogin }) {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const emailRef = useRef(null);
 
-  const [form, setForm]       = useState({ email: '', password: '' });
+  const [form, setForm] = useState({ email: '', password: '', role: 'student' });
   const [loading, setLoading] = useState(false);
 
-  // Sanitize the ?reason= value: strip HTML tags, cap at 200 chars
   const rawReason = searchParams.get('reason') || '';
   const safeReason = rawReason.replace(/<[^>]*>/g, '').slice(0, 200);
   const [error, setError] = useState(safeReason);
 
-  // Clear ?reason= from the URL after showing it once (clean address bar)
   useEffect(() => {
     if (searchParams.has('reason')) {
       setSearchParams({}, { replace: true });
     }
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  }, []);
 
   useEffect(() => { emailRef.current?.focus(); }, []);
 
@@ -40,65 +32,189 @@ function Login({ onLogin }) {
     setError('');
     setLoading(true);
     try {
-      const { data: res } = await login(form);
-      saveToken(res.data.token);
-      onLogin(res.data);
+      // Map frontend roles to backend roles
+      const backendRole = form.role === 'instructor' ? 'teacher' : 'student';
+      const loginPayload = {
+        email: form.email,
+        password: form.password,
+        role: backendRole
+      };
+      
+      const response = await login(loginPayload);
+      const user = response.user || response;
+      
+      saveAuthData(response.token, user);
+      onLogin(user);
       window.scrollTo(0, 0);
       navigate('/');
     } catch (err) {
-      setError(err.response?.data?.message || 'Login failed. Please check your credentials.');
+      // Handle specific error messages from backend
+      let errorMessage = 'Login failed. Please check your credentials.';
+      
+      if (err.response?.data?.detail) {
+        errorMessage = err.response.data.detail;
+      } else if (err.response?.status === 403) {
+        errorMessage = 'You are trying to login with the wrong account type.';
+      } else if (err.response?.status === 404) {
+        errorMessage = 'No account found with this email address.';
+      } else if (err.response?.status === 401) {
+        errorMessage = 'Invalid email or password.';
+      } else if (err.message) {
+        errorMessage = err.message;
+      }
+      
+      setError(errorMessage);
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <div className="auth-card">
-      <h2>Welcome back 👋</h2>
+    <div className="min-h-screen flex items-center justify-center p-6 bg-transparent overflow-hidden relative">
+      {/* Background Animated Elements */}
+      <motion.div 
+        animate={{ 
+          scale: [1, 1.2, 1],
+          opacity: [0.1, 0.2, 0.1],
+          rotate: [0, 90, 0]
+        }}
+        transition={{ duration: 20, repeat: Infinity, ease: "linear" }}
+        className="absolute top-0 -left-20 w-[500px] h-[500px] bg-purple-500/20 blur-[120px] rounded-full" 
+      />
+      <motion.div 
+        animate={{ 
+          scale: [1, 1.5, 1],
+          opacity: [0.1, 0.15, 0.1],
+          rotate: [0, -90, 0]
+        }}
+        transition={{ duration: 25, repeat: Infinity, ease: "linear" }}
+        className="absolute bottom-0 -right-20 w-[600px] h-[600px] bg-pink-500/20 blur-[150px] rounded-full" 
+      />
 
-      {error && <p className="error-msg" role="alert">{error}</p>}
-
-      <form onSubmit={handleSubmit} noValidate>
-        <div className="form-group">
-          <label htmlFor="login-email">Email</label>
-          <input
-            id="login-email"
-            ref={emailRef}
-            type="email"
-            placeholder="you@example.com"
-            value={form.email}
-            onChange={set('email')}
-            required
-            aria-required="true"
-            autoComplete="email"
-          />
+      <motion.div 
+        initial={{ opacity: 0, y: 30, scale: 0.95 }}
+        animate={{ opacity: 1, y: 0, scale: 1 }}
+        transition={{ duration: 0.6, cubicBezier: [0.23, 1, 0.32, 1] }}
+        className="glass-card w-full max-w-md p-10 relative z-10 overflow-hidden"
+      >
+        <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-purple-500 to-pink-500" />
+        
+        <div className="flex flex-col items-center mb-10">
+          <motion.div 
+            whileHover={{ scale: 1.1, rotate: 10 }}
+            className="w-16 h-16 rounded-2xl bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center text-white shadow-xl shadow-purple-500/20 mb-6"
+          >
+            <Sparkles size={32} />
+          </motion.div>
+          <h1 className="text-3xl font-black tracking-tight text-white text-center">
+            Welcome <span className="bg-gradient-to-r from-purple-400 to-pink-400 bg-clip-text text-transparent">Back</span>
+          </h1>
+          <p className="text-white/40 mt-2 font-medium">Continue your learning journey</p>
         </div>
-        <div className="form-group">
-          <label htmlFor="login-password">Password</label>
-          <input
-            id="login-password"
-            type="password"
-            placeholder="••••••••"
-            value={form.password}
-            onChange={set('password')}
-            required
-            aria-required="true"
-            autoComplete="current-password"
-          />
-        </div>
-        <button
-          type="submit"
-          className="btn btn-primary btn-full"
-          disabled={loading}
-          aria-label="Log in to your account"
-        >
-          {loading ? <Spinner small /> : 'Login'}
-        </button>
-      </form>
 
-      <p className="auth-footer">
-        Don't have an account? <Link to="/signup">Sign up</Link>
-      </p>
+        {error && (
+          <motion.div 
+            initial={{ opacity: 0, x: -10 }}
+            animate={{ opacity: 1, x: 0 }}
+            className="mb-8 p-4 bg-red-500/10 border border-red-500/30 rounded-lg text-red-400 text-sm font-medium flex items-center gap-3"
+          >
+            <div className="w-1.5 h-1.5 rounded-full bg-red-500" />
+            {error}
+          </motion.div>
+        )}
+
+        <form onSubmit={handleSubmit} className="space-y-6">
+          {/* Role Selection */}
+          <div className="space-y-3">
+            <label className="text-[10px] text-white/40 font-black uppercase tracking-[0.2em] px-1">Account Type</label>
+            <div className="grid grid-cols-2 gap-3">
+              <button
+                type="button"
+                onClick={() => setForm(f => ({ ...f, role: 'student' }))}
+                className={`p-4 rounded-xl border transition-all flex items-center gap-3 ${
+                  form.role === 'student' 
+                    ? 'bg-purple-500/20 border-purple-500/40 text-white' 
+                    : 'bg-white/5 border-white/10 text-white/60 hover:bg-white/10'
+                }`}
+              >
+                <User size={18} />
+                <span className="text-sm font-medium">Student</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setForm(f => ({ ...f, role: 'instructor' }))}
+                className={`p-4 rounded-xl border transition-all flex items-center gap-3 ${
+                  form.role === 'instructor' 
+                    ? 'bg-purple-500/20 border-purple-500/40 text-white' 
+                    : 'bg-white/5 border-white/10 text-white/60 hover:bg-white/10'
+                }`}
+              >
+                <GraduationCap size={18} />
+                <span className="text-sm font-medium">Instructor</span>
+              </button>
+            </div>
+          </div>
+
+          <div className="space-y-2">
+            <label className="text-[10px] text-white/40 font-black uppercase tracking-[0.2em] px-1">Email Address</label>
+            <div className="relative group">
+              <Mail className="absolute left-4 top-1/2 -translate-y-1/2 text-white/20 group-focus-within:text-purple-500 transition-colors" size={18} />
+              <input
+                ref={emailRef}
+                type="email"
+                placeholder="name@example.com"
+                value={form.email}
+                onChange={set('email')}
+                className="input-glass pl-12"
+                required
+              />
+            </div>
+          </div>
+
+          <div className="space-y-2">
+            <label className="text-[10px] text-white/40 font-black uppercase tracking-[0.2em] px-1">Password</label>
+            <div className="relative group">
+              <Lock className="absolute left-4 top-1/2 -translate-y-1/2 text-white/20 group-focus-within:text-purple-500 transition-colors" size={18} />
+              <input
+                type="password"
+                placeholder="••••••••"
+                value={form.password}
+                onChange={set('password')}
+                className="input-glass pl-12"
+                required
+              />
+            </div>
+          </div>
+
+          <div className="text-right">
+            <Link 
+              to="/forgot-password" 
+              className="text-xs text-purple-400 hover:text-purple-300 transition-colors font-medium"
+            >
+              Forgot Password?
+            </Link>
+          </div>
+
+          <button
+            type="submit"
+            className="btn-primary w-full h-14 text-sm uppercase font-black tracking-widest mt-4"
+            disabled={loading}
+          >
+            {loading ? <Spinner small /> : (
+              <>
+                <span>Sign In as {form.role === 'student' ? 'Student' : 'Instructor'}</span>
+                <ArrowRight size={18} />
+              </>
+            )}
+          </button>
+        </form>
+
+        <div className="mt-10 pt-10 border-t border-white/5 text-center">
+          <p className="text-white/30 text-sm">
+            Don't have an account? <Link to="/signup" className="text-purple-400 font-bold hover:text-purple-300 transition-colors">Create Account</Link>
+          </p>
+        </div>
+      </motion.div>
     </div>
   );
 }

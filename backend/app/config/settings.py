@@ -20,10 +20,10 @@ class Settings(BaseSettings):
     # In production set this to your exact frontend domain, e.g.:
     #   FRONTEND_URL=https://your-app.vercel.app
     # In development the middleware also allows localhost:3000 and :5173.
-    FRONTEND_URL: str = "http://localhost:3000"
+    FRONTEND_URL: str = "http://localhost:3002"
 
     # ── Server ────────────────────────────────────────────────────────────────
-    PORT: int = 8000
+    PORT: int = 5000
     ENVIRONMENT: str = "development"   # "development" | "production"
 
     # ── File uploads ──────────────────────────────────────────────────────────
@@ -82,7 +82,7 @@ class Settings(BaseSettings):
         Development: also allow the two common Vite dev-server ports.
         """
         if self.is_production:
-            return [self.FRONTEND_URL]
+            return [self.FRONTEND_URL, "http://localhost:3000", "http://localhost:5173"]
         return list({self.FRONTEND_URL, "http://localhost:3000", "http://localhost:5173"})
 
 

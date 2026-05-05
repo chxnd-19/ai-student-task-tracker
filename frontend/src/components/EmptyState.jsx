@@ -19,26 +19,31 @@ const EmptyState = ({ icon: Icon, title, description, action }) => {
       transition={{ duration: 0.4 }}
       className="w-full"
     >
-      <GlassCard className="p-20 flex flex-col items-center text-center border-dashed border-2 bg-white/[0.02] border-white/10 hover:border-primary/40 transition-all duration-700 group relative overflow-hidden">
-        <div className="absolute inset-0 bg-primary/5 opacity-0 group-hover:opacity-100 transition-opacity" />
-        <div className="relative mb-12">
-          <div className="absolute inset-0 bg-primary/20 blur-[80px] rounded-full scale-150 animate-pulse" />
-          <div className="relative w-28 h-28 rounded-[40px] bg-white/5 flex items-center justify-center text-primary border border-white/10 backdrop-blur-2xl shadow-2xl transition-transform duration-700 group-hover:scale-110 group-hover:rotate-6">
-            {Icon && <Icon size={56} strokeWidth={1.5} />}
+      <div className="glass-card p-20 flex flex-col items-center text-center border-dashed border bg-white/[0.01] border-white/5 hover:border-purple-500/30 transition-all duration-700 group relative overflow-hidden rounded-[32px]">
+        <div className="absolute inset-0 bg-gradient-to-b from-purple-500/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
+        
+        <div className="relative mb-8">
+          <div className="absolute inset-0 bg-purple-500/20 blur-[60px] rounded-full scale-150 group-hover:bg-purple-500/30 transition-all" />
+          <div className="relative w-24 h-24 rounded-3xl bg-white/5 flex items-center justify-center text-purple-400 border border-white/10 backdrop-blur-3xl shadow-2xl transition-all duration-700 group-hover:scale-110 group-hover:rotate-3 group-hover:text-purple-300 animate-float">
+            {Icon && <Icon size={48} strokeWidth={1.5} />}
           </div>
         </div>
         
-        <h3 className="text-4xl font-black mb-4 tracking-tighter text-white group-hover:text-primary transition-colors">{title}</h3>
-        <p className="text-white/40 max-w-lg mx-auto mb-12 text-xl leading-relaxed font-medium">
+        <h3 className="text-3xl font-black mb-3 tracking-tight text-white">{title}</h3>
+        <p className="text-white/40 max-w-sm mx-auto mb-10 text-lg leading-relaxed font-medium">
           {description}
         </p>
         
         {action && (
-          <div className="relative z-10 scale-125">
+          <motion.div 
+            whileHover={{ scale: 1.05 }}
+            whileTap={{ scale: 0.95 }}
+            className="relative z-10"
+          >
             {action}
-          </div>
+          </motion.div>
         )}
-      </GlassCard>
+      </div>
     </motion.div>
   );
 };

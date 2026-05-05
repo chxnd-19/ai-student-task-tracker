@@ -1,143 +1,98 @@
-import React, { useState, useEffect } from 'react';
-import { BrowserRouter as Router, Routes, Route, Navigate, useLocation } from 'react-router-dom';
-import Navbar from './components/Navbar';
-import Sidebar from './components/Sidebar';
-import TeacherLogin from './pages/TeacherLogin';
-import StudentLogin from './pages/StudentLogin';
+import React from 'react';
+import { BrowserRouter as Router, Routes, Route, Navigate, Link } from 'react-router-dom';
+import Login from './pages/Login';
 import Signup from './pages/Signup';
+import ForgotPassword from './pages/ForgotPassword';
+import ResetPassword from './pages/ResetPassword';
 import TeacherDashboard from './pages/TeacherDashboard';
 import StudentDashboard from './pages/StudentDashboard';
-import ProfilePage from './pages/ProfilePage';
-import TeacherTasksPage from './pages/TeacherTasksPage';
-import TeacherStudentsPage from './pages/TeacherStudentsPage';
-import StudentAssignmentsPage from './pages/StudentAssignmentsPage';
-import StudentSubmissionsPage from './pages/StudentSubmissionsPage';
-import StudentProfileView from './pages/StudentProfileView';
-import { getToken } from './services/authService';
-
+import ClassesPage from './pages/ClassesPage';
+import ClassDetailsPage from './pages/ClassDetailsPage';
+import SettingsPage from './pages/SettingsPage';
+import { AuthProvider, useAuth } from './context/AuthContext';
+import { WorkspaceProvider } from './context/WorkspaceProvider';
+import { motion } from 'framer-motion';
+import ErrorBoundary from './components/ErrorBoundary';
 import GlassCard from './components/GlassCard';
-import { motion, AnimatePresence } from 'framer-motion';
 
-const pageVariants = {
-  hidden: { opacity: 0, y: 20 },
-  visible: { opacity: 1, y: 0 }
-};
-
-function CalendarPage() { 
-  return (
-    <motion.div initial="hidden" animate="visible" variants={pageVariants} className="dashboard-container max-w-[1400px] mx-auto px-8">
-      <h2 className="text-4xl font-extrabold tracking-tight mb-8">Calendar</h2>
-      <GlassCard className="p-12 text-center border-dashed bg-surface/30">
-        <p className="text-muted text-lg">Your academic schedule will appear here. No events scheduled for this week.</p>
-      </GlassCard>
-    </motion.div>
-  ); 
+function PrivateRoute({ children }) {
+  const { isAuthenticated } = useAuth();
+  if (!isAuthenticated) return <Navigate to="/login" replace />;
+  return children;
 }
 
-function PrivateRoute({ user, children }) {
-  return user ? children : <Navigate to="/login/student" replace />;
-}
-
-function RoleRoute({ user, roles, children }) {
-  if (!user) return <Navigate to="/login/student" replace />;
+function RoleRoute({ roles, children }) {
+  const { user, isAuthenticated } = useAuth();
+  if (!isAuthenticated) return <Navigate to="/login" replace />;
   if (!roles.includes(user.role)) return <Navigate to="/" replace />;
   return children;
 }
 
-function AppRoutes({ user, handleLogin }) {
-  const location = useLocation();
+function HomeRedirect() {
+  const { user, isAuthenticated } = useAuth();
+  if (!isAuthenticated) return <Navigate to="/login" replace />;
+  if (user.role === 'teacher') return <TeacherDashboard />;
+  return <StudentDashboard />;
+}
 
+function NotFound() {
   return (
-    <AnimatePresence mode="wait">
-      <motion.div
-        key={location.pathname}
-        initial={{ opacity: 0, x: 10 }}
-        animate={{ opacity: 1, x: 0 }}
-        exit={{ opacity: 0, x: -10 }}
-        transition={{ duration: 0.3, ease: 'easeOut' }}
-      >
-        <Routes location={location}>
-          <Route path="/login/teacher" element={<TeacherLogin onLogin={handleLogin} />} />
-          <Route path="/login/student" element={<StudentLogin onLogin={handleLogin} />} />
-          <Route path="/login"         element={<Navigate to="/login/student" replace />} />
-          <Route path="/signup"        element={<Signup onLogin={handleLogin} />} />
+    <div className="flex flex-col items-center justify-center h-[70vh] text-center">
+      <h2 className="text-6xl font-black mb-4">404</h2>
+      <p className="text-xl text-white/40 mb-8">Page not found</p>
+      <Link to="/" className="btn-primary px-8 h-12">Go Home</Link>
+    </div>
+  );
+}
 
-          <Route path="/" element={
-            <PrivateRoute user={user}>
-              {user?.role === 'teacher'
-                ? <TeacherDashboard user={user} />
-                : <StudentDashboard user={user} />}
-            </PrivateRoute>
-          } />
+function AppContent() {
+  const { login } = useAuth();
+  
+  return (
+    <Routes>
+      {/* Public Routes */}
+      <Route path="/login" element={<Login onLogin={login} />} />
+      <Route path="/signup" element={<Signup onLogin={login} />} />
+      <Route path="/forgot-password" element={<ForgotPassword />} />
+      <Route path="/reset-password/:token" element={<ResetPassword />} />
 
-          <Route path="/tasks" element={
-            <RoleRoute user={user} roles={['teacher']}><TeacherTasksPage /></RoleRoute>
-          } />
-          <Route path="/students" element={
-            <RoleRoute user={user} roles={['teacher']}><TeacherStudentsPage /></RoleRoute>
-          } />
+      {/* Protected Routes */}
+      <Route path="/" element={<HomeRedirect />} />
+      
+      <Route path="/dashboard" element={
+        <PrivateRoute><HomeRedirect /></PrivateRoute>
+      } />
 
-          <Route path="/student/:id" element={
-            <RoleRoute user={user} roles={['teacher']}><StudentProfileView /></RoleRoute>
-          } />
+      <Route path="/classes" element={
+        <PrivateRoute><ClassesPage /></PrivateRoute>
+      } />
 
-          <Route path="/assignments" element={
-            <RoleRoute user={user} roles={['student']}><StudentAssignmentsPage /></RoleRoute>
-          } />
-          <Route path="/submissions" element={
-            <RoleRoute user={user} roles={['student']}><StudentSubmissionsPage /></RoleRoute>
-          } />
+      <Route path="/classes/:classId" element={
+        <PrivateRoute><ClassDetailsPage /></PrivateRoute>
+      } />
 
-          <Route path="/calendar" element={
-            <PrivateRoute user={user}><CalendarPage /></PrivateRoute>
-          } />
+      <Route path="/settings" element={
+        <PrivateRoute><SettingsPage /></PrivateRoute>
+      } />
 
-          <Route path="/profile" element={
-            <PrivateRoute user={user}><ProfilePage user={user} /></PrivateRoute>
-          } />
-
-          <Route path="*" element={<Navigate to="/" replace />} />
-        </Routes>
-      </motion.div>
-    </AnimatePresence>
+      <Route path="*" element={<NotFound />} />
+    </Routes>
   );
 }
 
 function App() {
-  const [user, setUser] = useState(() => {
-    if (!getToken()) return null;
-    try {
-      const stored = localStorage.getItem('user');
-      return stored ? JSON.parse(stored) : null;
-    } catch {
-      return null;
-    }
-  });
-
-  const handleLogin = (userData) => {
-    setUser(userData);
-    localStorage.setItem('user', JSON.stringify(userData));
-  };
-
-  const handleLogout = () => {
-    setUser(null);
-    localStorage.removeItem('user');
-    localStorage.removeItem('token');
-  };
-
   return (
-    <Router>
-      <div className={user ? 'app-container min-h-screen bg-background' : 'auth-container min-h-screen bg-background'}>
-        {user && <Sidebar user={user} onLogout={handleLogout} />}
-
-        <main className={user ? 'main-content' : 'full-content'}>
-          {user && <Navbar user={user} onLogout={handleLogout} />}
-          <div className={user ? 'py-8' : 'w-full flex items-center justify-center'}>
-            <AppRoutes user={user} handleLogin={handleLogin} />
-          </div>
-        </main>
-      </div>
-    </Router>
+    <ErrorBoundary>
+      <AuthProvider>
+        <Router>
+          <WorkspaceProvider>
+            <div className="min-h-screen bg-[#0b0f1a] text-white">
+              <AppContent />
+            </div>
+          </WorkspaceProvider>
+        </Router>
+      </AuthProvider>
+    </ErrorBoundary>
   );
 }
 

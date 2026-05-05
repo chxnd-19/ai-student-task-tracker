@@ -35,15 +35,15 @@ function StudentAssignmentsPage() {
       
       {loading ? (
         <div className="flex justify-center p-20"><Spinner /></div>
-      ) : tasks.length === 0 ? (
+      ) : (Array.isArray(tasks) ? tasks : []).length === 0 ? (
         <EmptyState 
           icon={Inbox}
           title="No Assignments Yet"
-          description="Your instructors haven't posted any assignments for your classes. Enjoy the free time or check back later!"
+          description="Your teachers haven't posted any assignments for your classes. Enjoy the free time or check back later!"
         />
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {tasks.map(task => (
+          {(Array.isArray(tasks) ? tasks : []).map(task => (
             <GlassCard key={task._id} className="p-6">
               <div className="flex justify-between items-start mb-4">
                 <span className="text-[10px] font-bold uppercase tracking-widest text-primary bg-primary/10 px-2 py-1 rounded">{task.subject}</span>

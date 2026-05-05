@@ -8,7 +8,7 @@ from app.database.connection import get_db
 from app.utils.dependencies import get_current_user
 from app.utils.responses import ok
 
-router = APIRouter(prefix="/api/notifications", tags=["Notifications"])
+router = APIRouter(prefix="/notifications", tags=["Notifications"])
 
 
 @router.get("", summary="Get notifications for current user")

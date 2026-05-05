@@ -1,20 +1,21 @@
 """
 Submission routes — /api/submissions
 """
-from fastapi import APIRouter, Depends, UploadFile, File, Form
+from fastapi import APIRouter, Depends, UploadFile, File, Form, BackgroundTasks
 from typing import Optional
 
-from app.services import submission_service
+from app.services import submission_service, ai_service
 from app.database.connection import get_db
 from app.utils.dependencies import get_current_user, require_teacher, require_student
 from app.utils.responses import ok
 
-router = APIRouter(prefix="/api/submissions", tags=["Submissions"])
+router = APIRouter(prefix="/submissions", tags=["Submissions"])
 
 
 # ── Student: submit or resubmit a task ───────────────────────────────────────
 @router.post("", summary="Submit a task (student only)", status_code=201)
 async def submit_task(
+    background_tasks: BackgroundTasks,
     taskId:         str            = Form(...),
     textSubmission: Optional[str]  = Form(None),
     file:           Optional[UploadFile] = File(None),
@@ -22,6 +23,11 @@ async def submit_task(
 ):
     db  = get_db()
     sub = await submission_service.submit_task(taskId, textSubmission, file, user, db)
+    
+    # Trigger AI analysis in background
+    if sub and sub.get("id"):
+        background_tasks.add_task(ai_service.analyze_submission, sub["id"], db)
+        
     return ok(sub, status=201)
 
 

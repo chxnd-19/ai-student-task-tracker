@@ -15,7 +15,7 @@ from app.database.connection import get_db
 from app.utils.dependencies import require_teacher
 from app.utils.responses import ok_page
 
-router = APIRouter(prefix="/api/activity", tags=["Activity Logs"])
+router = APIRouter(prefix="/activity", tags=["Activity Logs"])
 
 
 @router.get(

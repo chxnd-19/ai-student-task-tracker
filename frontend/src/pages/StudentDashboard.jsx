@@ -1,161 +1,119 @@
-import React, { useEffect, useState, useCallback, useMemo } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import React, { useEffect, useState, useCallback } from 'react';
+import { AnimatePresence } from 'framer-motion';
+import api from '../services/api';
 import {
-  Plus,
   Clock,
   CheckCircle2,
   AlertCircle,
-  Timer,
+  TrendingUp,
   BookOpen,
-  Calendar as CalendarIcon,
-  ChevronRight,
-  History,
-  Search,
   Users,
-  User as UserIcon,
-  LayoutDashboard,
-  FileText,
-  MessageSquare,
-  Sparkles,
+  Layers,
+  ChevronRight,
 } from 'lucide-react';
 import { fetchTasks, fetchTaskSummary } from '../services/taskService';
 import { fetchMySubmissions } from '../services/submissionService';
-import { fetchJoinedClasses, joinClass } from '../services/classService';
 import SubmissionForm from '../components/SubmissionForm';
+import LiveActivityPanel from '../components/LiveActivityPanel';
+import { useSocket } from '../hooks/useSocket';
 import Spinner from '../components/Spinner';
 import Toast from '../components/Toast';
-import GlassCard from '../components/GlassCard';
-import EmptyState from '../components/EmptyState';
 import { getTaskStatus, STATUS_META } from '../utils/taskStatus';
-import Button from '../components/Button';
+import Layout from '../components/Layout';
+import { useAuth } from '../context/AuthContext';
+import Card from '../components/ui/Card';
+import Input from '../components/ui/Input';
+import Button from '../components/ui/Button';
 
-const DashboardSkeleton = () => (
-  <div className="space-y-8 animate-pulse">
-    <div className="hero h-64 skeleton opacity-10" />
-    <div className="dashboard-grid">
-      {[1, 2, 3, 4].map(i => <div key={i} className="h-32 skeleton opacity-10 rounded-2xl" />)}
-    </div>
-    <div className="h-40 skeleton opacity-10 rounded-2xl" />
-  </div>
-);
-
-const CircularProgress = ({ percentage, size = 80, strokeWidth = 8, color = "#7c3aed" }) => {
-  const radius = (size - strokeWidth) / 2;
-  const circumference = radius * 2 * Math.PI;
-  const offset = circumference - (percentage / 100) * circumference;
-
-  return (
-    <div className="circular-progress" style={{ width: size, height: size }}>
-      <svg width={size} height={size}>
-        <circle className="bg" cx={size / 2} cy={size / 2} r={radius} />
-        <motion.circle
-          initial={{ strokeDashoffset: circumference }}
-          animate={{ strokeDashoffset: offset }}
-          transition={{ duration: 1.5, ease: "easeOut" }}
-          cx={size / 2} cy={size / 2} r={radius}
-          strokeDasharray={circumference}
-          stroke={color}
-          style={{ strokeWidth, strokeLinecap: 'round', fill: 'none' }}
-        />
-      </svg>
-      <div className="absolute inset-0 flex items-center justify-center">
-        <span className="text-sm font-bold text-white">{percentage}%</span>
-      </div>
-    </div>
-  );
-};
-
-const containerVariants = {
-  hidden: { opacity: 0 },
-  visible: {
-    opacity: 1,
-    transition: { staggerChildren: 0.1 }
-  }
-};
-
-const itemVariants = {
-  hidden: { y: 20, opacity: 0 },
-  visible: {
-    y: 0,
-    opacity: 1,
-    transition: { type: 'spring', stiffness: 300, damping: 24 }
-  }
-};
-
-function StudentDashboard({ user }) {
-  const [classes,     setClasses]    = useState([]);
-  const [activeClass, setActiveClass] = useState(null);
-  const [joinCode,    setJoinCode]   = useState('');
-  const [joining,     setJoining]    = useState(false);
-  const [joinError,   setJoinError]  = useState('');
-
-  const [tasks,       setTasks]      = useState([]);
+function StudentDashboard() {
+  const { user } = useAuth();
+  // State Management
+  const [code, setCode] = useState("");
+  const [workspaces, setWorkspaces] = useState([]);
+  const [activeWorkspace, setActiveWorkspace] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [tasks, setTasks] = useState([]);
   const [submissions, setSubmissions] = useState([]);
-  const [loading,     setLoading]    = useState(true);
-  const [activeTask,  setActiveTask] = useState(null);
-  const [activeTab,    setActiveTab]  = useState('assignments');
-
   const [summary, setSummary] = useState({ pending: 0, submitted: 0, overdue: 0, late: 0 });
-
+  const [activeTask, setActiveTask] = useState(null);
   const [toast, setToast] = useState({ message: '', type: 'success' });
-  const showToast = (message, type = 'success') => setToast({ message, type });
+  const [joining, setJoining] = useState(false);
 
-  const loadClasses = useCallback(async () => {
-    try {
-      const { data } = await fetchJoinedClasses();
-      setClasses(data);
-      if (data.length > 0 && !activeClass) setActiveClass(data[0]);
-    } catch (err) {
-      showToast(err.response?.data?.message || 'Failed to load classes.', 'error');
-    }
-  }, [activeClass]);
+  const { activities = [] } = useSocket(activeWorkspace?._id);
 
-  useEffect(() => { loadClasses(); }, [loadClasses]);
-
-  const loadTasks = useCallback(async (cls) => {
-    if (!cls) { 
-      setTasks([]); 
-      setSubmissions([]); 
-      setSummary({ pending: 0, submitted: 0, overdue: 0, late: 0 });
-      setLoading(false); 
-      return; 
-    }
-    setLoading(true);
-    try {
-      const [t, s, sum] = await Promise.all([
-        fetchTasks({ classId: cls._id }),
-        fetchMySubmissions(),
-        fetchTaskSummary(cls._id),
-      ]);
-      setTasks(t.data);
-      setSubmissions(s.data);
-      setSummary(sum.data);
-    } catch (err) {
-      showToast(err.response?.data?.message || 'Failed to load assignments.', 'error');
-    } finally {
-      setTimeout(() => setLoading(false), 600);
-    }
+  const showToast = useCallback((message, type = 'success') => {
+    setToast({ message, type });
   }, []);
 
-  useEffect(() => { loadTasks(activeClass); }, [activeClass, loadTasks]);
+  const fetchWorkspaces = async () => {
+    try {
+      const res = await api.get("/api/classes");
+      setWorkspaces(res.data.data || []);
+    } catch (err) {
+      console.error("Fetch failed:", err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchWorkspaces();
+  }, []);
 
   const handleJoin = async (e) => {
-    e.preventDefault();
-    if (joining || !joinCode.trim()) return;
-    setJoinError('');
+    if (e) e.preventDefault();
+    if (!code.trim() || joining) return;
+
     setJoining(true);
     try {
-      const { data } = await joinClass(joinCode.trim());
-      setClasses((prev) => [...prev, data]);
-      setJoinCode('');
-      setActiveClass(data);
-      showToast(`Joined "${data.name}" successfully!`);
+      const res = await api.post("/api/classes/join", { code: code.trim() });
+      const workspace = res.data.data;
+      
+      // Prevent duplicates
+      setWorkspaces(prev => {
+        if (prev.some(w => w._id === workspace._id)) return prev;
+        return [...prev, workspace];
+      });
+      
+      setCode("");
+      setActiveWorkspace(workspace);
+      showToast(`Joined workspace "${workspace.name}" successfully!`);
     } catch (err) {
-      setJoinError(err.response?.data?.message || 'Failed to join class.');
+      const msg = err.response?.data?.detail || err.message || "Join failed. Please check the code.";
+      showToast(msg, "error");
     } finally {
       setJoining(false);
     }
   };
+
+  const loadWorkspaceData = useCallback(async (cls) => {
+    if (!cls?._id) return;
+    try {
+      const [tRes, sRes, sumRes] = await Promise.all([
+        fetchTasks({ classId: cls._id }),
+        fetchMySubmissions(),
+        fetchTaskSummary(cls._id),
+      ]);
+      setTasks(tRes?.data || []);
+      setSubmissions(sRes?.data || []);
+      setSummary(sumRes?.data || { pending: 0, submitted: 0, overdue: 0, late: 0 });
+    } catch (err) {
+      console.error("[StudentDashboard] Session load failed:", err);
+      showToast("Failed to sync workspace data.", "error");
+    }
+  }, [showToast]);
+
+  useEffect(() => {
+    if (activeWorkspace?._id) {
+      loadWorkspaceData(activeWorkspace);
+    }
+  }, [activeWorkspace?._id, loadWorkspaceData]);
+
+  useEffect(() => {
+    if (workspaces.length > 0 && !activeWorkspace) {
+      setActiveWorkspace(workspaces[0]);
+    }
+  }, [workspaces, activeWorkspace]);
 
   const getSubmission = (taskId) =>
     submissions.find((s) => String(s.taskId?._id || s.taskId) === String(taskId));
@@ -163,230 +121,255 @@ function StudentDashboard({ user }) {
   const handleSubmitSuccess = () => {
     showToast('Submission successful! ✅');
     setActiveTask(null);
-    loadTasks(activeClass);
+    if (activeWorkspace?._id) loadWorkspaceData(activeWorkspace);
   };
 
-  const statCards = [
-    { key: 'pending',   icon: <Clock size={18} />,        label: "Pending",   color: "#f59e0b", shadow: "rgba(245, 158, 11, 0.2)" },
-    { key: 'submitted', icon: <CheckCircle2 size={18} />, label: "Completed", color: "#10b981", shadow: "rgba(16, 185, 129, 0.2)" },
-    { key: 'overdue',   icon: <AlertCircle size={18} />,  label: "Overdue",   color: "#ef4444", shadow: "rgba(239, 68, 68, 0.2)" },
-    { key: 'late',      icon: <Timer size={18} />,        label: "Late",      color: "#f97316", shadow: "rgba(249, 115, 22, 0.2)" },
-  ];
+  // Dynamic Attendance Calculation
+  const totalRelevantTasks = summary.submitted + summary.pending;
+  const attendanceRate = totalRelevantTasks > 0 
+    ? Math.round((summary.submitted / totalRelevantTasks) * 100) 
+    : 0;
+  
+  const displayRate = totalRelevantTasks > 0 ? `${attendanceRate}%` : '--';
 
-  if (loading && classes.length === 0) return <div className="max-w-[1440px] mx-auto px-8 py-12"><DashboardSkeleton /></div>;
+  if (loading) return (
+    <Layout>
+      <div className="flex items-center justify-center min-h-[60vh]">
+        <Spinner text="Loading..." />
+      </div>
+    </Layout>
+  );
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-[#05060f] to-[#0b1020] radial-glow-before glow-after-pink relative px-8 pb-12 transition-all duration-300 ease-out">
+    <Layout>
       <Toast message={toast.message} type={toast.type} onClose={() => setToast({ message: '', type: 'success' })} />
+      
+      {/* HEADER */}
+      <div className="mb-6">
+        <h1 className="text-2xl font-semibold">
+          Welcome back, {user?.name?.split(' ')[0] || 'Student'}
+        </h1>
+        <p className="text-sm text-gray-400 mt-1">
+          {summary.pending} pending • {workspaces.length} classes
+        </p>
+      </div>
 
-      {/* ── Main Responsive Grid ── */}
-      <div className="grid lg:grid-cols-[2fr_1fr] gap-6 max-w-[1440px] mx-auto pt-8">
+      {/* GRID LAYOUT - 3 COLUMNS */}
+      <div className="grid grid-cols-3 gap-6">
         
-        {/* ── LEFT COLUMN: Welcome, Stats, Assignments ── */}
-        <div className="flex flex-col gap-6">
-          <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} className="mb-2">
-            <h1 className="text-3xl font-bold text-white mb-1 tracking-tight">
-              Welcome back, <span className="text-primary">{user?.name || 'Student'}!</span>
-            </h1>
-            <p className="text-xs text-gray-400 tracking-wide">Manage your academic progress and track active tasks.</p>
-          </motion.div>
-
-          {/* Stats 2x2 Grid */}
-          <div className="grid grid-cols-2 md:grid-cols-2 xl:grid-cols-2 gap-4">
-            {statCards.map(({ key, icon, label, color, tint }) => (
-              <GlassCard 
-                key={key} 
-                className={`!p-4 !rounded-2xl bg-gradient-to-b from-white/10 to-white/5 border border-white/20 backdrop-blur shadow-lg shadow-black/40 shadow-[0_0_25px_rgba(255,255,255,0.05)] hover:scale-[1.02] transition-all duration-300 ease-out relative overflow-hidden ${tint}`}
-              >
-                <div className="flex flex-col gap-3 relative z-10">
-                  <div className="w-9 h-9 rounded-xl flex items-center justify-center icon-glow shadow-inner" style={{ background: color + '15', color }}>
-                    {icon}
-                  </div>
-                  <div>
-                    <p className="text-[10px] text-gray-400 font-bold tracking-wide uppercase mb-1">{label}</p>
-                    <p className="text-2xl font-bold text-white leading-none tracking-tight">{summary[key] || 0}</p>
-                  </div>
-                </div>
-              </GlassCard>
-            ))}
+        {/* LEFT SIDE - 2 COLUMNS */}
+        <div className="col-span-2 space-y-6">
+          
+          {/* STATS GRID - 2x2 */}
+          <div className="grid grid-cols-2 gap-4">
+            <div className="bg-white/5 backdrop-blur-md border border-white/10 rounded-xl p-4 flex justify-between items-center transition-all duration-200 hover:border-white/20">
+              <div>
+                <Clock size={20} className="text-amber-400 mb-2" />
+                <p className="text-sm text-gray-400">Pending</p>
+              </div>
+              <p className="text-3xl font-semibold">{summary.pending}</p>
+            </div>
+            
+            <div className="bg-white/5 backdrop-blur-md border border-white/10 rounded-xl p-4 flex justify-between items-center transition-all duration-200 hover:border-white/20">
+              <div>
+                <CheckCircle2 size={20} className="text-emerald-400 mb-2" />
+                <p className="text-sm text-gray-400">Complete</p>
+              </div>
+              <p className="text-3xl font-semibold">{summary.submitted}</p>
+            </div>
+            
+            <div className="bg-white/5 backdrop-blur-md border border-white/10 rounded-xl p-4 flex justify-between items-center transition-all duration-200 hover:border-white/20">
+              <div>
+                <AlertCircle size={20} className="text-rose-400 mb-2" />
+                <p className="text-sm text-gray-400">Overdue</p>
+              </div>
+              <p className="text-3xl font-semibold">{summary.overdue}</p>
+            </div>
+            
+            <div className="bg-white/5 backdrop-blur-md border border-white/10 rounded-xl p-4 flex justify-between items-center transition-all duration-200 hover:border-white/20">
+              <div>
+                <TrendingUp size={20} className="text-blue-400 mb-2" />
+                <p className="text-sm text-gray-400">Completion Rate</p>
+              </div>
+              <p className="text-3xl font-semibold">{displayRate}</p>
+            </div>
           </div>
 
-          {/* Assignment Section */}
-          <section className="bg-gradient-to-b from-white/10 to-white/5 border border-white/20 rounded-2xl p-6 shadow-lg shadow-black/40 space-y-4 transition-all duration-300">
-            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-2">
-              <h2 className="text-lg font-bold text-white tracking-tight">
-                {activeClass ? activeClass.name : 'All Assignments'}
+          {/* ACTIVE ASSIGNMENTS */}
+          <div className="bg-white/5 backdrop-blur-md border border-white/10 rounded-xl p-5 transition-all duration-200 hover:border-white/20">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-base font-semibold flex items-center gap-2">
+                <Layers size={18} className="text-purple-400" />
+                Active Assignments
               </h2>
-              
-              {activeClass && (
-                <div className="flex gap-2 bg-white/5 p-1 rounded-full w-fit">
-                  {['assignments', 'materials', 'discussion'].map(tab => (
-                    <button
-                      key={tab}
-                      onClick={() => setActiveTab(tab)}
-                      className={`${
-                        activeTab === tab
-                          ? "bg-gradient-to-r from-purple-500 to-pink-500 text-white shadow-md"
-                          : "bg-white/10 text-gray-300 hover:bg-white/20"
-                      } px-4 py-1.5 rounded-full text-sm font-medium transition-all duration-200 capitalize`}
-                    >
-                      {tab}
-                    </button>
-                  ))}
-                </div>
-              )}
+              <span className="text-sm text-gray-400">{tasks.length} total</span>
             </div>
 
-            <AnimatePresence mode="wait">
-              {loading ? (
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {[1,2,3,4].map(i => <div key={i} className="h-48 skeleton rounded-2xl opacity-10" />)}
-                </div>
-              ) : !activeClass ? (
-                <div className="flex justify-center py-12">
-                  <div className="text-center">
-                    <div className="w-20 h-20 bg-primary/10 rounded-full flex items-center justify-center mx-auto mb-6 text-primary animate-pulse shadow-[0_0_30px_rgba(124,58,237,0.2)]">
-                      <Sparkles size={40} />
-                    </div>
-                    <h3 className="text-lg font-bold text-white mb-2 tracking-tight">Select a Workspace</h3>
-                    <p className="text-xs text-gray-400 max-w-xs mx-auto tracking-wide">Join a class or select one from your workspaces to see your assignments.</p>
-                  </div>
-                </div>
-              ) : activeTab === "assignments" ? (
-                tasks.length === 0 ? (
-                  <div className="text-center py-12 border border-dashed border-white/10 rounded-2xl bg-black/20">
-                    <LayoutDashboard className="mx-auto mb-4 text-white/20" size={32} />
-                    <p className="text-xs text-gray-400 font-medium uppercase tracking-widest">No active assignments</p>
-                  </div>
-                ) : (
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    {tasks.map((task) => {
-                      const sub    = getSubmission(task._id);
-                      const status = getTaskStatus(task, sub);
-                      const meta   = STATUS_META[status];
-                      return (
-                        <GlassCard 
-                          key={task._id} 
-                          className="!p-5 !rounded-2xl bg-gradient-to-b from-white/10 to-white/5 border border-white/20 shadow-lg shadow-black/40 hover:shadow-xl hover:shadow-purple-500/10 hover:scale-[1.02] transition-all duration-300 ease-out flex flex-col group"
-                        >
-                          <div className="flex justify-between items-start mb-4">
-                            <span className="text-[9px] font-bold uppercase tracking-widest text-white/25">{task.subject || activeClass.subject}</span>
-                            <span className="px-2.5 py-0.5 rounded-full text-[9px] font-bold uppercase tracking-wider shadow-sm" style={{ background: meta.bg, color: meta.color }}>{meta.label}</span>
+            {tasks.length === 0 ? (
+              <div className="text-center text-gray-400 py-8">
+                <BookOpen size={32} className="mx-auto text-white/10 mb-3" />
+                <p className="text-sm">No active assignments</p>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {tasks.map((task) => {
+                  const sub = getSubmission(task._id);
+                  const status = getTaskStatus(task, sub);
+                  const meta = STATUS_META[status];
+                  return (
+                    <div
+                      key={task._id}
+                      onClick={() => setActiveTask(activeTask?._id === task._id ? null : task)}
+                      className="bg-white/5 border border-white/10 rounded-lg p-4 hover:bg-white/10 hover:border-white/20 transition-all duration-200 cursor-pointer"
+                    >
+                      <div className="flex items-center gap-4">
+                        <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-purple-500/20 to-pink-500/20 border border-white/10 flex items-center justify-center text-white/70 font-semibold text-sm shrink-0">
+                          {task.title[0]}
+                        </div>
+                        
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center justify-between mb-1">
+                            <h4 className="text-sm font-medium truncate">{task.title}</h4>
+                            <span 
+                              className="text-xs px-2.5 py-1 rounded-full border font-medium ml-2 shrink-0"
+                              style={{ 
+                                color: meta.color, 
+                                backgroundColor: meta.bg + '20', 
+                                borderColor: meta.color + '40' 
+                              }}
+                            >
+                              {meta.label}
+                            </span>
                           </div>
-                          <h4 className="text-base font-bold mb-2 text-white line-clamp-1 tracking-tight group-hover:text-primary transition-colors">{task.title}</h4>
-                          <p className="text-xs text-gray-400 mb-6 line-clamp-2 leading-relaxed tracking-wide">{task.description}</p>
-                          <div className="flex items-center justify-between pt-4 border-t border-white/5 mt-auto">
-                            <div className="flex items-center gap-2 text-[10px] font-bold text-white/30 uppercase tracking-widest">
-                              <Clock size={14} className="text-primary/60" />
+                          <div className="flex items-center gap-4 text-xs text-gray-400">
+                            <span className="flex items-center gap-1.5">
+                              <Clock size={12} /> 
                               {new Date(task.dueDate).toLocaleDateString()}
-                            </div>
-                            <Button onClick={() => setActiveTask(activeTask?._id === task._id ? null : task)} className="h-8 px-5 text-[10px] uppercase font-black tracking-widest hover:scale-[1.02] active:scale-[0.97] transition-all">{sub ? 'Update' : 'Submit'}</Button>
+                            </span>
+                            <span className="flex items-center gap-1.5">
+                              <Users size={12} /> 
+                              {task.subject}
+                            </span>
                           </div>
-                          {activeTask?._id === task._id && (
-                            <div className="mt-4 pt-4 border-t border-white/10 space-y-4">
-                              <SubmissionForm task={task} onSuccess={handleSubmitSuccess} />
-                            </div>
-                          )}
-                        </GlassCard>
-                      );
-                    })}
-                  </div>
-                )
-              ) : activeTab === "materials" ? (
-                <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="text-center py-12 bg-black/20 rounded-2xl border border-dashed border-white/10">
-                  <BookOpen className="mx-auto mb-4 text-white/20" size={40} />
-                  <h3 className="text-lg font-bold text-white mb-2">Class Materials</h3>
-                  <p className="text-xs text-gray-400">No materials have been shared for this workspace yet.</p>
-                </motion.div>
-              ) : (
-                <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="text-center py-12 bg-black/20 rounded-2xl border border-dashed border-white/10">
-                  <MessageSquare className="mx-auto mb-4 text-white/20" size={40} />
-                  <h3 className="text-lg font-bold text-white mb-2">Discussion Board</h3>
-                  <p className="text-xs text-gray-400">Join the conversation with your peers and instructor.</p>
-                </motion.div>
-              )}
-            </AnimatePresence>
-          </section>
+                        </div>
+
+                        <ChevronRight 
+                          size={18} 
+                          className={`text-white/30 transition-transform duration-200 shrink-0 ${
+                            activeTask?._id === task._id ? 'rotate-90 text-purple-400' : ''
+                          }`} 
+                        />
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
         </div>
 
-        {/* ── RIGHT COLUMN: Join Class, Search, Workspaces ── */}
-        <div className="flex flex-col gap-6">
+        {/* RIGHT SIDEBAR - 1 COLUMN */}
+        <div className="col-span-1 space-y-6">
           
-          {/* Join Class Card */}
-          <section className="lg:scale-[1.02] bg-gradient-to-b from-white/10 to-white/5 border border-white/20 rounded-2xl p-8 relative overflow-hidden group shadow-lg shadow-black/40 transition-all duration-300 ease-out">
-            <div className="absolute inset-0 bg-gradient-to-r from-purple-500/10 to-pink-500/10 blur-xl -z-10 pointer-events-none opacity-50 group-hover:opacity-100 transition-opacity" />
-            <div className="flex items-center gap-4 mb-6">
-              <div className="w-11 h-11 rounded-xl bg-primary/20 flex items-center justify-center text-primary shadow-[0_0_20px_rgba(124,58,237,0.3)] shadow-inner">
-                <Plus size={22} />
-              </div>
-              <div>
-                <h3 className="text-lg font-bold text-white tracking-tight">Join Class</h3>
-                <p className="text-xs text-gray-400 tracking-wide uppercase">Enter access code</p>
-              </div>
-            </div>
-            <form onSubmit={handleJoin} className="space-y-4">
+          {/* JOIN CLASS */}
+          <div className="bg-white/5 backdrop-blur-md border border-white/10 rounded-xl p-5 transition-all duration-200 hover:border-white/20">
+            <h3 className="text-sm font-medium mb-3">Join Class</h3>
+            <form onSubmit={handleJoin} className="space-y-3">
               <input
                 type="text"
-                placeholder="E.g. CODE12"
-                value={joinCode}
-                onChange={(e) => { setJoinCode(e.target.value.toUpperCase()); setJoinError(''); }}
-                className="w-full px-5 py-3.5 rounded-xl bg-black/40 border border-white/10 text-white focus:outline-none focus:ring-2 focus:ring-purple-500 transition-all uppercase font-mono text-lg tracking-widest placeholder:text-white/10"
+                placeholder="ENTER CODE"
+                value={code}
+                onChange={(e) => setCode(e.target.value.toUpperCase())}
+                className="w-full h-11 px-4 rounded-lg bg-white/10 border border-white/10 text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-purple-500 text-center font-mono tracking-[0.3em] font-semibold"
                 maxLength={6}
               />
-              <Button type="submit" disabled={joining} className="w-full h-12 rounded-xl font-black text-xs uppercase tracking-[0.2em] !bg-gradient-to-r from-purple-500 to-pink-500 hover:shadow-[0_0_25px_rgba(168,85,247,0.5)] hover:brightness-110 active:scale-[0.97] transition-all">
-                {joining ? <Spinner small /> : 'Join Workspace'}
-              </Button>
+              <button
+                type="submit"
+                disabled={joining || !code.trim()}
+                className="w-full h-11 bg-gradient-to-r from-purple-500 to-pink-500 rounded-lg text-white font-medium hover:opacity-90 active:scale-[0.98] transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {joining ? "Joining..." : "Join Class"}
+              </button>
             </form>
-            {joinError && <p className="text-danger text-[10px] mt-3 font-bold text-center bg-danger/10 p-3 rounded-xl border border-danger/20">{joinError}</p>}
-          </section>
+          </div>
 
-          {/* Quick Search */}
-          <section className="bg-gradient-to-b from-white/10 to-white/5 border border-white/20 rounded-2xl p-4 shadow-lg shadow-black/40 transition-all duration-300 hover:scale-[1.02]">
-            <h3 className="text-[10px] font-bold text-white uppercase tracking-[0.2em] mb-4 px-1">Quick Search</h3>
-            <div className="relative group">
-              <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 text-white/20 group-focus-within:text-primary transition-colors" size={15} />
-              <input disabled placeholder="Search assignments..." className="w-full bg-black/40 border border-white/10 rounded-xl py-3 pl-10 pr-4 text-xs cursor-not-allowed text-white/30 focus:ring-2 focus:ring-purple-500 transition-all" />
-            </div>
-          </section>
-
-          {/* My Workspaces */}
-          <section className="bg-gradient-to-b from-white/10 to-white/5 border border-white/20 rounded-2xl p-4 shadow-lg shadow-black/40 transition-all duration-300">
-            <div className="flex items-center justify-between mb-4 px-1">
-              <h3 className="text-[10px] font-bold text-white uppercase tracking-[0.2em]">My Workspaces</h3>
-              <span className="text-[10px] font-bold text-primary bg-primary/10 px-2 py-0.5 rounded-full shadow-inner">{classes.length}</span>
-            </div>
-            <div className="space-y-2">
-              {classes.map(cls => (
-                <div
-                  key={cls._id}
-                  onClick={() => setActiveClass(cls)}
-                  className={`p-3.5 rounded-xl border transition-all duration-300 cursor-pointer flex items-center gap-4 hover:scale-[1.02] ${
-                    activeClass?._id === cls._id 
-                      ? 'bg-white/10 border-purple-500/30 shadow-inner shadow-purple-500/10' 
-                      : 'bg-white/[0.02] border-white/5 hover:bg-white/10 hover:border-white/10'
-                  }`}
-                >
-                  <div className={`w-10 h-10 rounded-lg flex items-center justify-center font-black text-base flex-shrink-0 transition-colors shadow-inner ${
-                    activeClass?._id === cls._id ? 'bg-primary text-white shadow-lg shadow-primary/40' : 'bg-white/5 text-white/30'
-                  }`}>
-                    {cls.name[0]}
+          {/* MY CLASSES */}
+          <div className="bg-white/5 backdrop-blur-md border border-white/10 rounded-xl p-5 transition-all duration-200 hover:border-white/20">
+            <h3 className="text-sm font-medium mb-3">My Classes</h3>
+            
+            {workspaces.length === 0 ? (
+              <div className="text-center text-gray-400 py-8">
+                <p className="text-sm">No classes yet</p>
+              </div>
+            ) : (
+              <div className="space-y-2">
+                {workspaces.map((cls) => (
+                  <div
+                    key={cls._id}
+                    onClick={() => setActiveWorkspace(cls)}
+                    className={`flex items-center justify-between p-3 rounded-lg hover:bg-white/5 transition cursor-pointer ${
+                      activeWorkspace?._id === cls._id 
+                        ? 'bg-purple-500/20 border border-purple-500/40' 
+                        : ''
+                    }`}
+                  >
+                    <div className="flex items-center gap-3 flex-1 min-w-0">
+                      <div 
+                        className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-semibold shrink-0 ${
+                          activeWorkspace?._id === cls._id 
+                            ? 'bg-purple-500 text-white' 
+                            : 'bg-white/10 text-white/50'
+                        }`}
+                      >
+                        {cls.name[0]}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className={`text-sm font-medium truncate ${
+                          activeWorkspace?._id === cls._id ? 'text-white' : 'text-gray-300'
+                        }`}>
+                          {cls.name}
+                        </p>
+                        <p className="text-xs text-gray-400">
+                          {cls.taskCount || 0} tasks • {cls.students?.length || 0} students
+                        </p>
+                      </div>
+                    </div>
+                    <ChevronRight 
+                      size={16} 
+                      className={`shrink-0 ${activeWorkspace?._id === cls._id ? 'text-purple-400' : 'text-white/30'}`} 
+                    />
                   </div>
-                  <div className="flex-1 overflow-hidden">
-                    <h4 className="text-sm font-bold text-white/90 mb-0.5 truncate tracking-tight">{cls.name}</h4>
-                    <p className="text-[10px] text-gray-400 uppercase font-bold tracking-widest">{cls.subject}</p>
-                  </div>
-                  {activeClass?._id === cls._id && <div className="w-1.5 h-1.5 rounded-full bg-primary shadow-[0_0_10px_rgba(124,58,237,1)]" />}
-                </div>
-              ))}
-              {classes.length === 0 && (
-                <p className="text-center py-6 text-[10px] text-gray-400 uppercase tracking-widest font-black opacity-20">No active workspaces</p>
-              )}
-            </div>
-          </section>
+                ))}
+              </div>
+            )}
+          </div>
 
+          {/* LIVE ACTIVITY */}
+          <div className="bg-white/5 backdrop-blur-md border border-white/10 rounded-xl p-5 transition-all duration-200 hover:border-white/20 min-h-[120px]">
+            <h3 className="text-sm font-medium mb-3">Live Activity</h3>
+            {activities.length === 0 ? (
+              <div className="text-center text-gray-400 py-6">
+                <p className="text-sm">No recent activity</p>
+              </div>
+            ) : (
+              <LiveActivityPanel activities={activities} />
+            )}
+          </div>
         </div>
       </div>
-    </div>
+
+      {/* SUBMISSION FORM MODAL */}
+      <AnimatePresence>
+        {activeTask && (
+          <SubmissionForm
+            task={activeTask}
+            existingSubmission={getSubmission(activeTask._id)}
+            onClose={() => setActiveTask(null)}
+            onSuccess={handleSubmitSuccess}
+          />
+        )}
+      </AnimatePresence>
+    </Layout>
   );
 }
 

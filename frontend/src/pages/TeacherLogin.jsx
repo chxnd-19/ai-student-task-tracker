@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useNavigate, Link, useSearchParams } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { login, saveToken } from '../services/authService';
+import { login, saveAuthData } from '../services/authService';
 import Spinner from '../components/Spinner';
 import GlassCard from '../components/GlassCard';
 import { parseError } from '../utils/errorParser';
@@ -34,9 +34,9 @@ function TeacherLogin({ onLogin }) {
     setError('');
     setLoading(true);
     try {
-      const { data: res } = await login({ ...form, role: 'teacher' });
-      saveToken(res.data.token);
-      onLogin(res.data);
+      const response = await login({ ...form, role: 'teacher' });
+      saveAuthData(response.token, response.user);
+      onLogin(response.user);
       window.scrollTo(0, 0);
       navigate('/');
     } catch (err) {
@@ -57,7 +57,7 @@ function TeacherLogin({ onLogin }) {
           <div className="w-16 h-16 rounded-2xl bg-primary/10 flex items-center justify-center text-primary mb-6">
             <span className="text-3xl">🎓</span>
           </div>
-          <h2 className="text-3xl font-extrabold tracking-tight mb-2">Instructor Login</h2>
+          <h2 className="text-3xl font-extrabold tracking-tight mb-2">Teacher Login</h2>
           <p className="text-muted">Enter your details to access your portal</p>
         </div>
 
@@ -99,7 +99,7 @@ function TeacherLogin({ onLogin }) {
 
         <div className="mt-10 pt-8 border-t border-border space-y-4 text-center">
           <p className="text-sm text-muted">Are you a student? <Link to="/login/student" className="text-primary font-bold hover:underline">Student Portal</Link></p>
-          <p className="text-sm text-muted">New instructor? <Link to="/signup" className="text-primary font-bold hover:underline">Create account</Link></p>
+          <p className="text-sm text-muted">New teacher? <Link to="/signup" className="text-primary font-bold hover:underline">Create account</Link></p>
         </div>
       </GlassCard>
     </motion.div>

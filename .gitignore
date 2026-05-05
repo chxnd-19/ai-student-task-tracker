@@ -1,36 +1,42 @@
-# Dependencies
+# ── Node ──────────────────────────────────────────────────────────────────────
 node_modules/
-.venv/
-venv/
-env/
-
-# Environment
-.env
-.env.*
-!.env.example
-
-# Build/Dist
 dist/
 build/
-*.egg-info/
+.vite/
+.cache/
 
-# Python cache
+# ── Python ────────────────────────────────────────────────────────────────────
 __pycache__/
 *.pyc
 *.pyo
 *.pyd
+*.egg-info/
+.venv/
+venv/
+env/
 
-# OS/Editor
+# ── Environment (never commit secrets) ───────────────────────────────────────
+.env
+.env.*
+!.env.example
+!.env.development
+!.env.production
+
+# ── Logs ──────────────────────────────────────────────────────────────────────
+*.log
+logs/
+
+# ── OS / Editor ───────────────────────────────────────────────────────────────
 .DS_Store
+Thumbs.db
 .vscode/
 .idea/
 *.swp
+*.swo
 
-# Application specific
-backend/uploads/
-logs/
-*.log
+# ── Uploads (user-generated content) ─────────────────────────────────────────
+backend/uploads/*
+!backend/uploads/.gitkeep
 
-# Antigravity Scratch
+# ── Scratch / temp ────────────────────────────────────────────────────────────
 scratch/
-

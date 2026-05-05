@@ -17,6 +17,13 @@ class VersionEntry(BaseModel):
     submittedAt: datetime
 
 
+class AIFeedback(BaseModel):
+    summary: str
+    suggestions: list[str]
+    score: int
+    status: str  # pending, completed, failed
+
+
 class SubmissionOut(BaseModel):
     id: str
     taskId: str | dict
@@ -25,6 +32,7 @@ class SubmissionOut(BaseModel):
     fileUrl: Optional[str] = None
     status: str
     submittedAt: datetime
+    aiFeedback: Optional[AIFeedback] = None
     versions: list[VersionEntry] = []
     createdAt: datetime
     updatedAt: datetime

@@ -49,6 +49,7 @@ async def create_class(payload: ClassCreate, user: dict, db: AsyncIOMotorDatabas
     }
     result = await db.classes.insert_one(doc)
     cls    = await db.classes.find_one({"_id": result.inserted_id})
+    print(f"[Backend] Workspace created: {cls.get('name')} (ID: {result.inserted_id})")
     return serialize_doc(cls)
 
 
@@ -99,6 +100,15 @@ async def join_class(join_code: str, user: dict, db: AsyncIOMotorDatabase) -> di
         {"$push": {"students": student_oid}, "$set": {"updatedAt": datetime.now(timezone.utc)}},
     )
     updated = await db.classes.find_one({"_id": cls["_id"]})
+    
+    # Real-time activity
+    from app.services.socket_service import emit_activity
+    await emit_activity(
+        str(cls["_id"]),
+        "joined the workspace",
+        user["name"]
+    )
+    
     return serialize_doc(updated)
 
 

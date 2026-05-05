@@ -1,6 +1,3 @@
-"""
-Auth request / response schemas.
-"""
 from typing import Literal
 from pydantic import BaseModel, EmailStr, Field, field_validator
 
@@ -20,11 +17,19 @@ class SignupRequest(BaseModel):
         return v
 
 
-
 class LoginRequest(BaseModel):
     email: EmailStr
     password: str
     role: Literal["teacher", "student"] | None = None
+
+
+class ForgotPasswordRequest(BaseModel):
+    email: str
+
+
+class ResetPasswordRequest(BaseModel):
+    token: str
+    password: str = Field(..., min_length=6, max_length=72)
 
 
 class AuthUserOut(BaseModel):

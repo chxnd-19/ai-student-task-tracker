@@ -118,13 +118,17 @@ async def submit_task(
         f"[submission] Student={user['id']!r} submitted task={task_id!r} "
         f"status={'late' if is_late else 'on-time'}"
     )
-    await log_activity(
-        db, user["id"], "submission.submit",
-        {"taskId": task_id, "late": is_late},
-    )
-    # Invalidate the student's summary cache — their counts just changed
-    from app.utils.cache import summary_cache
-    summary_cache.invalidate_prefix(f"summary:{user['id']}:")
+
+    # Real-time activity
+    from app.services.socket_service import emit_activity
+    if task.get("classId"):
+        await emit_activity(
+            str(task["classId"]),
+            "submitted an assignment",
+            user["name"],
+            {"taskTitle": task["title"]}
+        )
+    
     return serialize_doc(result)
 
 

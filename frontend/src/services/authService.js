@@ -1,26 +1,37 @@
-import axios from 'axios';
+import api from './api';
 
-/**
- * Auth calls use a plain axios instance (no interceptor) to avoid
- * redirect loops when a 401 is returned on login/signup itself.
- *
- * Base URL follows the same rule as api.js:
- *   - Dev:  empty → Vite proxy handles /api/*
- *   - Prod: VITE_API_URL env var, or same-origin fallback
- *
- * 🚨 CRITICAL: All API calls MUST use relative '/api' routing via Nginx.
- */
-const authAxios = axios.create({
-  baseURL: import.meta.env.VITE_API_URL || '/api',
-  timeout: 10_000,
-});
+const BASE_URL = '/api/auth';
 
-const BASE_URL = '/auth';
+export const signup = async (data) => {
+  try {
+    const res = await api.post(`${BASE_URL}/signup`, data);
+    return res.data; // Returns { success, user, token }
+  } catch (err) {
+    console.error("API ERROR:", err.response?.data || err.message);
+    throw err;
+  }
+};
 
-export const signup = (data) => authAxios.post(`${BASE_URL}/signup`, data);
-export const login  = (data) => authAxios.post(`${BASE_URL}/login`,  data);
+export const login = async (data) => {
+  try {
+    const res = await api.post(`${BASE_URL}/login`, data);
+    return res.data; // Returns { success, user, token }
+  } catch (err) {
+    console.error("API ERROR:", err.response?.data || err.message);
+    throw err;
+  }
+};
 
-// ── Token helpers ────────────────────────────────────────────────────────────
+// ── Auth helpers ────────────────────────────────────────────────────────────
+export const saveAuthData = (token, user) => {
+  localStorage.setItem('token', token);
+  localStorage.setItem('user', JSON.stringify(user));
+};
+
 export const saveToken   = (token) => localStorage.setItem('token', token);
 export const getToken    = ()      => localStorage.getItem('token');
-export const removeToken = ()      => localStorage.removeItem('token');
+export const getUser     = ()      => JSON.parse(localStorage.getItem('user'));
+export const removeToken = ()      => {
+  localStorage.removeItem('token');
+  localStorage.removeItem('user');
+};

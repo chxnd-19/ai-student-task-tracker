@@ -1,8 +1,9 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Search, Bell, User, LogOut, UserCircle, Edit3, CheckCheck, X } from 'lucide-react';
+import { Search, Bell, User, LogOut, UserCircle, Edit3, CheckCheck, X, Layers, ChevronDown } from 'lucide-react';
 import { removeToken } from '../services/authService';
+import { useWorkspace } from '../context/WorkspaceContext';
 import { fetchNotifications, markRead, markAllRead } from '../services/notificationService';
 import ThemeToggle from './ThemeToggle';
 
@@ -31,6 +32,16 @@ const dropdownVariants = {
 
 function Navbar({ user, onLogout }) {
   const navigate = useNavigate();
+  const {
+    workspaces = [],
+    activeWorkspace = null,
+    setActiveWorkspace = () => {},
+    loading = false,
+    sessionLoading = false
+  } = useWorkspace() || {};
+  
+  const [showWorkspaceMenu, setShowWorkspaceMenu] = useState(false);
+  const workspaceRef = useRef(null);
 
   // ── Notification state ────────────────────────────────────────────────────
   const [showNotif,    setShowNotif]    = useState(false);
@@ -48,6 +59,7 @@ function Navbar({ user, onLogout }) {
     const handler = (e) => {
       if (notifRef.current  && !notifRef.current.contains(e.target))  setShowNotif(false);
       if (profileRef.current && !profileRef.current.contains(e.target)) setShowProfile(false);
+      if (workspaceRef.current && !workspaceRef.current.contains(e.target)) setShowWorkspaceMenu(false);
     };
     document.addEventListener('mousedown', handler);
     return () => document.removeEventListener('mousedown', handler);
@@ -122,15 +134,78 @@ function Navbar({ user, onLogout }) {
   const initials = user.name ? user.name.split(' ').map((w) => w[0]).join('').slice(0, 2).toUpperCase() : '?';
 
   return (
-    <nav className="navbar px-8 py-4 mb-6 sticky top-0 z-[50] backdrop-blur-md">
-      {/* Search */}
-      <div className="search-bar">
-        <Search className="search-icon" size={18} />
-        <input
-          type="text"
-          placeholder="Search everything..."
-          className="bg-surface border border-border rounded-md px-10 py-2 w-full focus:outline-none focus:ring-2 focus:ring-primary/50 transition-all"
-        />
+    <nav className="navbar px-8 py-4 mb-6 sticky top-0 z-[50] backdrop-blur-md flex items-center justify-between gap-8">
+      
+      <div className="flex items-center gap-6 flex-1">
+        {/* Workspace Switcher */}
+        {user && workspaces.length > 0 && (
+          <div className="relative" ref={workspaceRef}>
+            <button 
+              onClick={() => setShowWorkspaceMenu(!showWorkspaceMenu)}
+              className="flex items-center gap-3 px-4 py-2 rounded-xl bg-white/5 border border-white/10 hover:border-primary/50 transition-all group"
+            >
+              <div className="p-1.5 rounded-lg bg-primary/20 text-primary">
+                <Layers size={16} />
+              </div>
+              <div className="text-left hidden md:block">
+                <p className="text-[10px] font-bold text-muted uppercase tracking-widest leading-none mb-1">Active Workspace</p>
+                <p className="text-sm font-bold text-white leading-none truncate max-w-[150px]">
+                  {activeWorkspace?.name || 'Select Workspace'}
+                </p>
+              </div>
+              <ChevronDown size={14} className={`text-muted group-hover:text-white transition-transform duration-300 ${showWorkspaceMenu ? 'rotate-180' : ''}`} />
+            </button>
+
+            <AnimatePresence>
+              {showWorkspaceMenu && (
+                <motion.div
+                  variants={dropdownVariants}
+                  initial="hidden" animate="visible" exit="exit"
+                  className="absolute top-full left-0 mt-2 w-[240px] bg-[#0f172a] border border-white/10 rounded-[20px] shadow-2xl p-2 z-[60]"
+                >
+                  <p className="px-3 py-2 text-[10px] font-black text-muted uppercase tracking-[0.2em]">Switch Context</p>
+                  <div className="space-y-1 max-h-[300px] overflow-y-auto custom-scrollbar">
+                    {(Array.isArray(workspaces) ? workspaces : []).map(ws => (
+                      <button
+                        key={ws._id}
+                        onClick={() => {
+                          console.log("STEP 1 CLICK:", ws);
+                          setActiveWorkspace(ws);
+                          setShowWorkspaceMenu(false);
+                        }}
+                        className={`w-full flex items-center gap-3 p-3 rounded-xl transition-all ${
+                          activeWorkspace?._id === ws._id 
+                            ? 'bg-primary/20 border border-primary/20' 
+                            : 'hover:bg-white/5 border border-transparent'
+                        }`}
+                      >
+                        <div className={`w-8 h-8 rounded-lg flex items-center justify-center font-bold text-xs ${
+                          activeWorkspace?._id === ws._id ? 'bg-primary text-white' : 'bg-white/10 text-white/40'
+                        }`}>
+                          {ws.name[0]}
+                        </div>
+                        <div className="text-left overflow-hidden">
+                          <p className="text-sm font-bold text-white truncate">{ws.name}</p>
+                          <p className="text-[10px] text-muted truncate">{ws.subject}</p>
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </div>
+        )}
+
+        {/* Search */}
+        <div className="search-bar flex-1 max-w-md">
+          <Search className="search-icon" size={18} />
+          <input
+            type="text"
+            placeholder="Search everything..."
+            className="bg-surface border border-border rounded-xl px-10 py-2.5 w-full focus:outline-none focus:ring-2 focus:ring-primary/50 transition-all text-sm"
+          />
+        </div>
       </div>
 
       <div className="navbar-actions">

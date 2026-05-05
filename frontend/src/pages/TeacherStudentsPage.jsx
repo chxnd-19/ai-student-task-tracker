@@ -23,16 +23,29 @@ export default function TeacherStudentsPage() {
 
   useEffect(() => {
     fetchMyClasses()
-      .then(({ data }) => setClasses(data))
-      .catch(() => setError('Failed to load students.'))
+      .then(({ data }) => {
+        console.log("[TeacherStudentsPage] classes response:", data);
+        const safeClasses = Array.isArray(data) ? data : (data?.data || data?.classes || []);
+        setClasses(safeClasses);
+      })
+      .catch((err) => {
+        console.error("[TeacherStudentsPage] Error fetching classes:", err);
+        setError('Failed to load students.');
+      })
       .finally(() => setLoading(false));
   }, []);
 
   // Deduplicate students across all classes
   const allStudents = useMemo(() => {
     const map = {};
-    classes.forEach((cls) => {
-      (cls.students || []).forEach((s) => {
+    const safeClasses = Array.isArray(classes) ? classes : [];
+    
+    if (!Array.isArray(classes)) {
+      console.warn("[TeacherStudentsPage] classes is not array:", classes);
+    }
+
+    safeClasses.forEach((cls) => {
+      (Array.isArray(cls.students) ? cls.students : []).forEach((s) => {
         const sid = s._id || s.id;
         if (!sid) return;
         if (!map[sid]) map[sid] = { ...s, _id: sid, classes: [] };
@@ -41,6 +54,17 @@ export default function TeacherStudentsPage() {
     });
     return Object.values(map);
   }, [classes]);
+
+  if (!Array.isArray(classes)) {
+    console.error("[TeacherStudentsPage] Invalid classes state:", classes);
+    return (
+      <div className="flex items-center justify-center min-h-[400px]">
+        <GlassCard className="p-8 text-center text-danger font-bold">
+          Data format error. Please contact support.
+        </GlassCard>
+      </div>
+    );
+  }
 
   return (
     <motion.div

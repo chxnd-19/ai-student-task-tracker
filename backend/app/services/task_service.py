@@ -153,13 +153,17 @@ async def create_task(payload: TaskCreate, user: dict, db: AsyncIOMotorDatabase)
         f"[task] Created task={str(result.inserted_id)!r} "
         f"title={doc['title']!r} by teacher={user['id']!r}"
     )
-    await log_activity(
-        db, user["id"], "task.create",
-        {"taskId": str(result.inserted_id), "title": doc["title"]},
-    )
-    # Invalidate summary cache for all students assigned to this task
-    for sid in assigned_to:
-        summary_cache.invalidate_prefix(f"summary:{str(sid)}:")
+
+    # Real-time activity
+    from app.services.socket_service import emit_activity
+    if class_id:
+        await emit_activity(
+            str(class_id),
+            "created a new assignment",
+            user["name"],
+            {"taskTitle": doc["title"]}
+        )
+    
     return serialize_doc(task)
 
 
@@ -215,8 +219,17 @@ async def delete_task(task_id: str, user: dict, db: AsyncIOMotorDatabase) -> Non
 
 
 # ── GET /api/tasks/students ────────────────────────────────────────────────────
-async def get_students(db: AsyncIOMotorDatabase) -> list:
-    cursor = db.users.find({"role": "student"}, {"name": 1, "email": 1})
+async def get_students(db: AsyncIOMotorDatabase, workspace_id: str | None = None) -> list:
+    filt = {"role": "student"}
+    if workspace_id:
+        # If workspaceId is provided, only return students belonging to that class
+        cls = await db.classes.find_one({"_id": _oid(workspace_id)})
+        if cls:
+            filt["_id"] = {"$in": cls.get("students", [])}
+        else:
+            return []  # Workspace not found
+
+    cursor = db.users.find(filt, {"name": 1, "email": 1})
     return [serialize_doc(s) async for s in cursor]
 
 
