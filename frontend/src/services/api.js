@@ -1,45 +1,34 @@
 import axios from "axios";
 
+const BASE_URL = import.meta.env.VITE_API_URL || "http://localhost:5000";
+
 const api = axios.create({
-  baseURL: "http://localhost:5000",
+  baseURL: BASE_URL,
   withCredentials: true,
   timeout: 10000,
 });
 
-/**
- * Request Interceptor
- * Automatically injects the JWT token and logs the request payload.
- */
+// ── Request interceptor: inject JWT ──────────────────────────────────────────
 api.interceptors.request.use(
   (config) => {
-    const token = localStorage.getItem('token');
+    const token = localStorage.getItem("token");
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
     }
-    
-    // DEBUG LOGGING (MANDATORY)
-    console.log(`[API REQUEST] ${config.method?.toUpperCase()} ${config.url}:`, config.data || config.params || "No payload");
-    
     return config;
   },
-  (error) => {
-    console.error("[API REQUEST ERROR]:", error);
-    return Promise.reject(error);
-  }
+  (error) => Promise.reject(error)
 );
 
-/**
- * Response Interceptor
- * Logs every response and catches global errors.
- */
+// ── Response interceptor: handle 401 globally ────────────────────────────────
 api.interceptors.response.use(
-  (response) => {
-    // DEBUG LOGGING (MANDATORY)
-    console.log(`[API RESPONSE] ${response.config.method?.toUpperCase()} ${response.config.url}:`, response.data);
-    return response;
-  },
+  (response) => response,
   (error) => {
-    console.error(`[API RESPONSE ERROR] ${error.config?.method?.toUpperCase()} ${error.config?.url}:`, error.response?.data || error.message);
+    if (error.response?.status === 401) {
+      localStorage.removeItem("token");
+      localStorage.removeItem("user");
+      window.location.href = "/login";
+    }
     return Promise.reject(error);
   }
 );

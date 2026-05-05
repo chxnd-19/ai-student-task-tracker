@@ -32,7 +32,7 @@ import EmptyState from '../components/EmptyState';
 import Layout from '../components/Layout';
 import { useAuth } from '../context/AuthContext';
 
-const emptyTask = { title: '', subject: '', dueDate: '', description: '', status: 'pending', submissionType: 'text' };
+const emptyTask = { title: '', subject: '', dueDate: '', description: '', status: 'pending', submissionType: 'text', priority: 'medium' };
 
 function TeacherDashboard() {
   const { user } = useAuth();
@@ -55,6 +55,8 @@ function TeacherDashboard() {
   const [students, setStudents] = useState([]);
   const [avgGrade, setAvgGrade] = useState('--');
   const [completionRate, setCompletionRate] = useState(0);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [filterPriority, setFilterPriority] = useState('all');
 
   const { activities = [] } = useSocket(activeWorkspace?._id);
 
@@ -304,6 +306,29 @@ function TeacherDashboard() {
               )}
             </div>
 
+            {/* Search + Filter bar */}
+            {tasks.length > 0 && (
+              <div className="flex gap-3 mb-4">
+                <input
+                  type="text"
+                  placeholder="Search assignments..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="flex-1 h-9 px-3 rounded-lg bg-white/5 border border-white/10 text-sm text-white placeholder-white/30 focus:outline-none focus:ring-1 focus:ring-purple-500"
+                />
+                <select
+                  value={filterPriority}
+                  onChange={(e) => setFilterPriority(e.target.value)}
+                  className="h-9 px-3 rounded-lg bg-white/5 border border-white/10 text-sm text-white focus:outline-none focus:ring-1 focus:ring-purple-500"
+                >
+                  <option value="all">All Priority</option>
+                  <option value="high">High</option>
+                  <option value="medium">Medium</option>
+                  <option value="low">Low</option>
+                </select>
+              </div>
+            )}
+
             {tasks.length === 0 ? (
               <div className="text-center text-gray-400 py-12">
                 <Sparkles size={40} className="mx-auto text-white/10 mb-4" />
@@ -319,8 +344,13 @@ function TeacherDashboard() {
               </div>
             ) : (
               <div className="space-y-3">
-                {tasks.map((task) => {
+                {tasks
+                  .filter(t => filterPriority === 'all' || t.priority === filterPriority)
+                  .filter(t => !searchQuery || t.title.toLowerCase().includes(searchQuery.toLowerCase()) || t.subject.toLowerCase().includes(searchQuery.toLowerCase()))
+                  .map((task) => {
                   const analyticsData = analytics[String(task._id)] || {};
+                  const priorityColors = { high: 'text-rose-400 bg-rose-500/10 border-rose-500/20', medium: 'text-amber-400 bg-amber-500/10 border-amber-500/20', low: 'text-emerald-400 bg-emerald-500/10 border-emerald-500/20' };
+                  const priorityColor = priorityColors[task.priority] || priorityColors.medium;
                   return (
                     <div 
                       key={task._id}
@@ -335,6 +365,9 @@ function TeacherDashboard() {
                             <h4 className="text-sm font-medium">{task.title}</h4>
                             <p className="text-xs text-gray-400">{task.subject}</p>
                           </div>
+                          <span className={`text-[10px] px-2 py-0.5 rounded-full border font-semibold uppercase tracking-wide ${priorityColor}`}>
+                            {task.priority || 'medium'}
+                          </span>
                         </div>
                         <div className="flex gap-2">
                           <button 
@@ -540,6 +573,14 @@ function TeacherDashboard() {
                 <div className="space-y-2">
                   <label className="text-[10px] text-white/40 font-black uppercase tracking-widest px-1">Due Date</label>
                   <input type="date" className="input-glass" value={form.dueDate} onChange={(e) => setForm({...form, dueDate: e.target.value})} required />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-[10px] text-white/40 font-black uppercase tracking-widest px-1">Priority</label>
+                  <select className="input-glass" value={form.priority} onChange={(e) => setForm({...form, priority: e.target.value})}>
+                    <option value="low">Low</option>
+                    <option value="medium">Medium</option>
+                    <option value="high">High</option>
+                  </select>
                 </div>
                 <div className="space-y-2">
                   <label className="text-[10px] text-white/40 font-black uppercase tracking-widest px-1">Description</label>

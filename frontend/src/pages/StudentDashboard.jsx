@@ -38,6 +38,8 @@ function StudentDashboard() {
   const [activeTask, setActiveTask] = useState(null);
   const [toast, setToast] = useState({ message: '', type: 'success' });
   const [joining, setJoining] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [filterStatus, setFilterStatus] = useState('all');
 
   const { activities = [] } = useSocket(activeWorkspace?._id);
 
@@ -205,6 +207,30 @@ function StudentDashboard() {
               <span className="text-sm text-gray-400">{tasks.length} total</span>
             </div>
 
+            {/* Search + Filter */}
+            {tasks.length > 0 && (
+              <div className="flex gap-3 mb-4">
+                <input
+                  type="text"
+                  placeholder="Search tasks..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="flex-1 h-9 px-3 rounded-lg bg-white/5 border border-white/10 text-sm text-white placeholder-white/30 focus:outline-none focus:ring-1 focus:ring-purple-500"
+                />
+                <select
+                  value={filterStatus}
+                  onChange={(e) => setFilterStatus(e.target.value)}
+                  className="h-9 px-3 rounded-lg bg-white/5 border border-white/10 text-sm text-white focus:outline-none focus:ring-1 focus:ring-purple-500"
+                >
+                  <option value="all">All Status</option>
+                  <option value="pending">Pending</option>
+                  <option value="submitted">Submitted</option>
+                  <option value="overdue">Overdue</option>
+                  <option value="late">Late</option>
+                </select>
+              </div>
+            )}
+
             {tasks.length === 0 ? (
               <div className="text-center text-gray-400 py-8">
                 <BookOpen size={32} className="mx-auto text-white/10 mb-3" />
@@ -212,7 +238,14 @@ function StudentDashboard() {
               </div>
             ) : (
               <div className="space-y-3">
-                {tasks.map((task) => {
+                {tasks
+                  .filter(task => {
+                    const sub = getSubmission(task._id);
+                    const status = getTaskStatus(task, sub);
+                    return filterStatus === 'all' || status === filterStatus;
+                  })
+                  .filter(task => !searchQuery || task.title.toLowerCase().includes(searchQuery.toLowerCase()))
+                  .map((task) => {
                   const sub = getSubmission(task._id);
                   const status = getTaskStatus(task, sub);
                   const meta = STATUS_META[status];

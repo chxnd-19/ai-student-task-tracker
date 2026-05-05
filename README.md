@@ -1,68 +1,100 @@
-# Student Task Tracker
+# EduTracker — Student Task Tracker
 
-A full-stack web application for managing student assignments and submissions with role-based access control.
+A full-stack academic task management platform with role-based dashboards for students and instructors.
+
+---
 
 ## Features
 
-### Authentication & Authorization
-- **Secure JWT-based authentication** with role-based access (Student / Instructor)
-- **Forgot password system** with reset link generation (development mode — link shown in UI)
-- **Role-specific dashboards** with tailored views for students and instructors
+### Authentication
+- JWT-based login and signup
+- Role-based access: **Student** and **Instructor**
+- Forgot password with reset link (dev mode: link shown in UI)
+- Secure bcrypt password hashing
 
-### Student Features
-- View assigned tasks with due dates and status tracking
-- Submit assignments with text and file uploads
-- Track submission history and completion rates
-- Real-time notifications for new assignments and feedback
-- Personal analytics dashboard
-
-### Instructor Features
+### Instructor Dashboard
 - Create and manage classes with unique join codes
-- Assign tasks to students with deadlines and descriptions
-- Review student submissions and provide feedback
-- Class-level analytics and progress tracking
-- Student performance monitoring
+- Create, edit, and delete assignments with **priority levels** (Low / Medium / High)
+- **Search and filter** assignments by title or priority
+- View student submissions per assignment
+- Class analytics: completion rate, average grade, submission counts
+- Real-time activity feed via Socket.IO
 
-### Technical Features
-- **Real-time updates** via Socket.IO
-- **AI-powered feedback** (simulated) for submissions
-- **Responsive UI** with glassmorphism design
-- **MongoDB** for data persistence
-- **FastAPI** backend with async support
-- **React** frontend with Vite
+### Student Dashboard
+- Join classes using instructor-provided codes
+- View assigned tasks with due dates and status badges
+- **Search and filter** tasks by title or status
+- Submit assignments (text or file upload)
+- Track completion rate and overdue tasks
+- Real-time activity feed
+
+### General
+- Responsive glassmorphism UI (dark theme)
+- Toast notifications for all actions
+- Real-time updates via Socket.IO
+- AI-powered submission feedback (simulated)
 
 ---
 
 ## Tech Stack
 
-### Frontend
-- **React 18** with React Router
-- **Vite** for fast development and builds
-- **Tailwind CSS** for styling
-- **Framer Motion** for animations
-- **Axios** for API calls
-- **Lucide React** for icons
-
-### Backend
-- **FastAPI** (Python 3.13+)
-- **MongoDB** with Motor (async driver)
-- **JWT** for authentication
-- **Socket.IO** for real-time features
-- **Bcrypt** for password hashing
-- **Pydantic** for data validation
+| Layer     | Technology                                      |
+|-----------|-------------------------------------------------|
+| Frontend  | React 18, Vite, Tailwind CSS, Framer Motion     |
+| Backend   | FastAPI (Python 3.13+), Uvicorn                 |
+| Database  | MongoDB (Motor async driver)                    |
+| Auth      | JWT (python-jose), bcrypt (passlib)             |
+| Realtime  | Socket.IO (python-socketio + socket.io-client)  |
+| HTTP      | Axios with request/response interceptors        |
 
 ---
 
-## Setup Instructions
+## Project Structure
+
+```
+student-task-tracker/
+├── backend/
+│   ├── app/
+│   │   ├── api/           # Feature route handlers
+│   │   ├── routes/        # Auth routes (clean, no rate limiter)
+│   │   ├── services/      # Business logic layer
+│   │   ├── schemas/       # Pydantic request/response models
+│   │   ├── database/      # MongoDB connection (non-blocking)
+│   │   ├── utils/         # JWT, password, dependencies, responses
+│   │   ├── config/        # Settings (pydantic-settings)
+│   │   └── main.py        # FastAPI app entry point
+│   ├── run.py             # Server startup script
+│   ├── requirements.txt   # Python dependencies
+│   └── .env.example       # Environment variable template
+│
+├── frontend/
+│   ├── src/
+│   │   ├── components/    # Reusable UI components
+│   │   ├── pages/         # Route-level page components
+│   │   ├── services/      # API client + service modules
+│   │   ├── context/       # Auth + Workspace React context
+│   │   ├── hooks/         # Custom hooks (useSocket)
+│   │   └── utils/         # Task status helpers
+│   ├── package.json
+│   ├── vite.config.js     # Dev proxy: /api → localhost:5000
+│   └── .env.example
+│
+└── README.md
+```
+
+---
+
+## Installation
 
 ### Prerequisites
 - **Node.js** 18+ and npm
 - **Python** 3.13+
 - **MongoDB** (local or Atlas)
 
-### 1. Clone the Repository
+### 1. Clone
+
 ```bash
-git clone https://github.com/yourusername/student-task-tracker.git
+git clone https://github.com/chxnd-19/student-task-tracker.git
 cd student-task-tracker
 ```
 
@@ -71,10 +103,8 @@ cd student-task-tracker
 ```bash
 cd backend
 
-# Create virtual environment
+# Create and activate virtual environment
 python -m venv .venv
-
-# Activate virtual environment
 # Windows:
 .venv\Scripts\activate
 # macOS/Linux:
@@ -85,36 +115,31 @@ pip install -r requirements.txt
 
 # Configure environment
 cp .env.example .env
-# Edit .env with your MongoDB URI and JWT secret
+# Edit .env — set MONGO_URI and JWT_SECRET
 
-# Run the server
+# Start server
 python run.py
 ```
 
-Backend will start on `http://localhost:5000`
+Backend runs at `http://localhost:5000`
 
 ### 3. Frontend Setup
 
 ```bash
 cd frontend
 
-# Install dependencies
 npm install
-
-# Configure environment (optional)
-cp .env.example .env.development
-
-# Run development server
 npm run dev
 ```
 
-Frontend will start on `http://localhost:3000`
+Frontend runs at `http://localhost:3000`
 
 ---
 
 ## Environment Variables
 
-### Backend (`.env`)
+### Backend (`backend/.env`)
+
 ```env
 MONGO_URI=mongodb://localhost:27017/taskdb
 DB_NAME=taskdb
@@ -122,90 +147,60 @@ JWT_SECRET=your_secure_random_string_here
 PORT=5000
 ENVIRONMENT=development
 FRONTEND_URL=http://localhost:3000
+UPLOAD_DIR=uploads
+MAX_FILE_SIZE_MB=5
 ```
 
-### Frontend (`.env.development`)
+### Frontend (`frontend/.env.development`)
+
 ```env
 VITE_API_URL=http://localhost:5000
 ```
 
----
-
-## Project Structure
-
-```
-student-task-tracker/
-├── backend/
-│   ├── app/
-│   │   ├── api/           # Legacy API routes
-│   │   ├── routes/        # Clean auth routes
-│   │   ├── services/      # Business logic
-│   │   ├── schemas/       # Pydantic models
-│   │   ├── utils/         # Helpers (JWT, password, etc.)
-│   │   ├── database/      # MongoDB connection
-│   │   └── main.py        # FastAPI app entry point
-│   ├── run.py             # Server startup script
-│   └── requirements.txt   # Python dependencies
-│
-├── frontend/
-│   ├── src/
-│   │   ├── components/    # Reusable UI components
-│   │   ├── pages/         # Route pages
-│   │   ├── services/      # API client
-│   │   ├── context/       # React context (auth)
-│   │   └── App.jsx        # Main app component
-│   ├── package.json       # Node dependencies
-│   └── vite.config.js     # Vite configuration
-│
-└── README.md
-```
+> In development, Vite proxies `/api/*` to `localhost:5000` automatically.
 
 ---
 
 ## API Endpoints
 
-### Authentication
-- `POST /api/auth/signup` — Register new user
-- `POST /api/auth/login` — Login with email/password
-- `POST /api/auth/forgot-password` — Generate password reset link
-- `POST /api/auth/reset-password/{token}` — Reset password with token
+### Auth — `/api/auth`
 
-### Classes (Workspaces)
-- `GET /api/classes` — Get user's classes
-- `POST /api/classes` — Create new class (instructor only)
-- `POST /api/classes/join` — Join class with code (student only)
+| Method | Path                        | Description                  | Auth |
+|--------|-----------------------------|------------------------------|------|
+| POST   | `/signup`                   | Register new user            | No   |
+| POST   | `/login`                    | Login, returns JWT           | No   |
+| POST   | `/forgot-password`          | Generate reset link          | No   |
+| POST   | `/reset-password/{token}`   | Reset password with token    | No   |
 
-### Tasks
-- `GET /api/tasks` — List tasks
-- `POST /api/tasks` — Create task (instructor only)
-- `GET /api/tasks/{id}` — Get task details
-- `PUT /api/tasks/{id}` — Update task (instructor only)
-- `DELETE /api/tasks/{id}` — Delete task (instructor only)
+### Classes — `/api/classes`
 
-### Submissions
-- `POST /api/submissions` — Submit assignment (student only)
-- `GET /api/submissions/my` — Get own submissions (student only)
-- `GET /api/submissions/task/{task_id}` — Get task submissions (instructor only)
+| Method | Path          | Description                    | Role       |
+|--------|---------------|--------------------------------|------------|
+| GET    | `/`           | Get user's classes             | Any        |
+| POST   | `/`           | Create class                   | Instructor |
+| POST   | `/join`       | Join class by code             | Student    |
+| DELETE | `/{id}`       | Delete class                   | Instructor |
 
----
+### Tasks — `/api/tasks`
 
-## Development Notes
+| Method | Path              | Description                    | Role       |
+|--------|-------------------|--------------------------------|------------|
+| GET    | `/`               | List tasks (filtered)          | Any        |
+| POST   | `/`               | Create task                    | Instructor |
+| PUT    | `/{id}`           | Update task                    | Instructor |
+| DELETE | `/{id}`           | Delete task                    | Instructor |
+| GET    | `/summary`        | Task status summary            | Student    |
+| GET    | `/students`       | List all students              | Instructor |
 
-### Forgot Password Flow (Development Mode)
-- When a user requests a password reset, the backend generates a secure token
-- **In development**, the reset link is displayed directly in the UI (no email sent)
-- Click "Open Reset Page" to navigate to the reset form
-- **In production**, integrate an email service (SendGrid, AWS SES, etc.)
+### Submissions — `/api/submissions`
 
-### Database Stability
-- The app **always starts** even if MongoDB is unavailable
-- Routes return `503 Service Unavailable` if DB is down
-- No import-time side effects — all DB calls are inside route handlers
-
-### Testing Accounts
-Create test accounts via the signup page:
-- **Instructor**: Use role "Instructor" during signup
-- **Student**: Use role "Student" during signup
+| Method | Path                          | Description                  | Role       |
+|--------|-------------------------------|------------------------------|------------|
+| POST   | `/`                           | Submit assignment            | Student    |
+| GET    | `/my`                         | Get own submissions          | Student    |
+| GET    | `/task/{task_id}`             | Get task submissions         | Instructor |
+| GET    | `/analytics/class/{class_id}` | Class analytics              | Instructor |
+| GET    | `/analytics/student`          | Student analytics            | Student    |
 
 ---
 
@@ -213,44 +208,47 @@ Create test accounts via the signup page:
 
 ### Backend
 ```bash
-python run.py              # Start server
-python -m pytest           # Run tests (if configured)
+python run.py                    # Start with auto-reload
+python -m uvicorn app.main:app   # Direct uvicorn start
 ```
 
 ### Frontend
 ```bash
-npm run dev                # Development server
-npm run build              # Production build
-npm run preview            # Preview production build
-npm run lint               # Run ESLint
+npm run dev        # Development server (port 3000)
+npm run build      # Production build
+npm run preview    # Preview production build
 ```
 
 ---
 
-## Contributing
+## Development Notes
 
-1. Fork the repository
-2. Create a feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit your changes (`git commit -m 'feat: add amazing feature'`)
-4. Push to the branch (`git push origin feature/amazing-feature`)
-5. Open a Pull Request
+### Forgot Password (Dev Mode)
+No email service is configured. When a reset is requested:
+- If the email exists, the reset URL is returned in the API response
+- The frontend displays a clickable **"Open Reset Page"** button
+- In production, replace this with SendGrid / AWS SES
+
+### Database Resilience
+The backend always starts even if MongoDB is unavailable. Routes return `503 Service Unavailable` if the DB is down — the app never crashes on startup.
+
+### Task Priority
+Tasks support three priority levels: **Low**, **Medium**, **High**. Priority is stored in MongoDB and displayed as a colored badge in both dashboards.
+
+---
+
+## Future Improvements
+
+- [ ] Email integration for password reset (SendGrid / AWS SES)
+- [ ] Calendar view (monthly/weekly) for task deadlines
+- [ ] Push notifications for upcoming deadlines
+- [ ] Bulk task assignment to multiple classes
+- [ ] Export analytics as PDF/CSV
+- [ ] Dark/light theme toggle
+- [ ] Mobile app (React Native)
 
 ---
 
 ## License
 
-This project is licensed under the MIT License — see the [LICENSE](LICENSE) file for details.
-
----
-
-## Acknowledgments
-
-- Built with FastAPI and React
-- UI inspired by modern SaaS dashboards (Vercel, Linear)
-- Glassmorphism design trend
-
----
-
-## Support
-
-For issues or questions, please open an issue on GitHub.
+MIT — see [LICENSE](LICENSE) for details.

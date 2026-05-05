@@ -12,6 +12,7 @@ class TaskCreate(BaseModel):
     dueDate: str          # ISO date string from frontend
     description: str = ""
     submissionType: Literal["text", "file"] = "text"
+    priority: Literal["low", "medium", "high"] = "medium"
     classId: Optional[str] = None
 
     @field_validator("title")

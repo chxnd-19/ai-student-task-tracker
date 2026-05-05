@@ -58,16 +58,4 @@ app.mount("/socket.io", sio_app)
 # ── Health check ──────────────────────────────────────────────────────────────
 @app.get("/")
 def root():
-    return {"status": "Backend running"}
-
-
-# ── Startup route verification (printed once at import) ───────────────────────
-_routes = [
-    (list(r.methods), r.path)
-    for r in app.routes
-    if hasattr(r, "methods")
-]
-print("\n📋 Registered routes:")
-for methods, path in _routes:
-    print(f"   {methods} {path}")
-print()
+    return {"status": "Backend running", "version": "2.0.0"}

@@ -33,8 +33,6 @@ async def login(payload: LoginRequest, request: Request):
 
 @router.post("/forgot-password")
 async def forgot_password(payload: ForgotPasswordRequest, request: Request):
-    print("🚀 FORGOT PASSWORD ROUTE HIT!")
-    print(f"📧 Email: {payload.email}")
     try:
         db = get_db()
         return await auth_service.forgot_password(payload, db, ip=get_real_ip(request))
