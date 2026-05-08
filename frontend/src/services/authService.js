@@ -3,23 +3,13 @@ import api from './api';
 const BASE_URL = '/api/auth';
 
 export const signup = async (data) => {
-  try {
-    const res = await api.post(`${BASE_URL}/signup`, data);
-    return res.data; // Returns { success, user, token }
-  } catch (err) {
-    console.error("API ERROR:", err.response?.data || err.message);
-    throw err;
-  }
+  const res = await api.post(`${BASE_URL}/signup`, data);
+  return res.data;
 };
 
 export const login = async (data) => {
-  try {
-    const res = await api.post(`${BASE_URL}/login`, data);
-    return res.data; // Returns { success, user, token }
-  } catch (err) {
-    console.error("API ERROR:", err.response?.data || err.message);
-    throw err;
-  }
+  const res = await api.post(`${BASE_URL}/login`, data);
+  return res.data;
 };
 
 // ── Auth helpers ────────────────────────────────────────────────────────────

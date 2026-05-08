@@ -1,5 +1,5 @@
 """
-Student Task Tracker — FastAPI entry point.
+ScholarOS — FastAPI entry point.
 
 STABILITY GUARANTEES:
 - App ALWAYS starts, even if MongoDB is down
@@ -15,6 +15,7 @@ from fastapi.responses import JSONResponse
 from fastapi.exceptions import RequestValidationError
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
+from app.config.settings import get_settings
 from app.database import connect_db, close_db
 from app.routes.auth import router as auth_router
 from app.api.workspace import router as workspace_router
@@ -24,9 +25,11 @@ from app.api.notification import router as notification_router
 from app.api.user import router as user_router
 from app.api.activity import router as activity_router
 from app.api.ai import router as ai_router
+from app.api.profile import router as profile_router
 from app.services.socket_service import sio_app
 
-logger = logging.getLogger(__name__)
+logger   = logging.getLogger(__name__)
+settings = get_settings()
 
 
 @asynccontextmanager
@@ -37,15 +40,17 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(
-    title="Student Task Tracker",
+    title="ScholarOS API",
     version="2.0.0",
     lifespan=lifespan,
 )
 
 # ── CORS ──────────────────────────────────────────────────────────────────────
+# Development: allows localhost:3000, localhost:5173, and FRONTEND_URL.
+# Production: restricts to FRONTEND_URL only (set in .env).
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=settings.cors_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -115,6 +120,7 @@ app.include_router(notification_router, prefix="/api")
 app.include_router(user_router,         prefix="/api")
 app.include_router(activity_router,     prefix="/api")
 app.include_router(ai_router,           prefix="/api")
+app.include_router(profile_router,      prefix="/api")
 
 # ── Socket.IO ─────────────────────────────────────────────────────────────────
 app.mount("/socket.io", sio_app)

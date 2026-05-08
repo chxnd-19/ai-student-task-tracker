@@ -11,7 +11,7 @@
  * and empty state. The component is wrapped in React.memo.
  */
 import React, { memo, useMemo } from 'react';
-import { Brain, Clock, Zap, AlertTriangle, CheckCircle2, RefreshCw, Calendar } from 'lucide-react';
+import { Brain, Clock, Zap, AlertTriangle, CheckCircle2, RefreshCw, Calendar, Ban } from 'lucide-react';
 import { useAIInsights, useAIPlan, useAIPriority } from '../hooks/useAI';
 
 // ── Score badge ───────────────────────────────────────────────────────────────
@@ -114,16 +114,52 @@ const InsightsSection = memo(function InsightsSection({ classId }) {
 
 // ── Daily plan section ────────────────────────────────────────────────────────
 const DailyPlanSection = memo(function DailyPlanSection({ classId }) {
-  const { data: plan = [], isLoading, isError, refetch, isFetching } =
+  const { data: plan = [], isLoading, isError, refresh, isFetching, generatedAt } =
     useAIPlan(classId);
+
+  const priorityDot = {
+    high:   'bg-rose-500',
+    medium: 'bg-amber-500',
+    low:    'bg-emerald-500',
+  };
+
+  const priorityLabel = {
+    high:   'High Priority',
+    medium: 'Medium Priority',
+    low:    'Low Priority',
+  };
+
+  // "Generated just now" / "Generated X min ago" — uses server timestamp
+  const updatedLabel = generatedAt
+    ? (() => {
+        const diffMs  = Date.now() - new Date(generatedAt).getTime();
+        const diffMin = Math.floor(diffMs / 60000);
+        return diffMin < 1 ? 'Generated just now' : `Generated ${diffMin}m ago`;
+      })()
+    : null;
+
+  // Separate active vs overdue vs closed blocks for rendering
+  const activeBlocks  = plan.filter(b => b.type === 'active');
+  const overdueBlocks = plan.filter(b => b.type === 'overdue');
+  const closedBlocks  = plan.filter(b => b.type === 'closed');
 
   return (
     <Section
       icon={<Calendar size={14} className="text-blue-400" />}
       title="Today's Study Plan"
-      onRefresh={refetch}
+      onRefresh={refresh}
       isRefreshing={isFetching}
     >
+      {/* Timestamp */}
+      {updatedLabel && !isFetching && (
+        <p className="text-[10px] text-white/20 mb-2 -mt-1">{updatedLabel}</p>
+      )}
+      {isFetching && (
+        <p className="text-[10px] text-purple-400/60 mb-2 -mt-1 flex items-center gap-1">
+          <RefreshCw size={9} className="animate-spin" /> Refreshing…
+        </p>
+      )}
+
       {isLoading ? (
         <div className="space-y-1">
           {[...Array(3)].map((_, i) => <SkeletonRow key={i} wide />)}
@@ -131,27 +167,146 @@ const DailyPlanSection = memo(function DailyPlanSection({ classId }) {
       ) : isError ? (
         <p className="text-xs text-rose-400/70 py-2">Could not load plan.</p>
       ) : plan.length === 0 ? (
-        <p className="text-xs text-white/30 py-2">No tasks to plan. You're all caught up!</p>
+        <div className="text-center py-6">
+          <Calendar size={22} className="mx-auto text-white/10 mb-2" />
+          <p className="text-xs text-white/30 font-medium">No tasks to plan</p>
+          <p className="text-[10px] text-white/20 mt-1">
+            Add more tasks to get a smarter study plan.
+          </p>
+        </div>
       ) : (
         <div className="space-y-2">
-          {plan.map((block, i) => (
+          {/* Late-night banner — shown when all active blocks are for tomorrow */}
+          {activeBlocks.length > 0 && activeBlocks[0].day === 'tomorrow' && (
+            <div className="flex items-center gap-2 p-2.5 rounded-lg bg-blue-500/10 border border-blue-500/20 mb-3">
+              <span className="text-sm">🌙</span>
+              <p className="text-[10px] text-blue-300 leading-relaxed">
+                It's late. Your plan is scheduled for <span className="font-bold">tomorrow morning</span>.
+              </p>
+            </div>
+          )}
+
+          {/* ── STEP 5: Overdue blocks — red cards, no "Starts now" ── */}
+          {overdueBlocks.length > 0 && (
+            <>
+              <p className="text-[10px] font-black uppercase tracking-widest text-rose-400/70 px-1 pt-1">
+                Missed Tasks
+              </p>
+              {overdueBlocks.map((block, i) => (
+                <div
+                  key={block.task_id || `overdue-${i}`}
+                  className="flex items-center gap-3 p-2.5 rounded-lg border bg-rose-500/10 border-rose-500/30"
+                >
+                  {/* Overdue icon column */}
+                  <div className="shrink-0 text-center min-w-[60px]">
+                    <p className="text-[10px] font-bold text-rose-400 leading-tight">OVERDUE</p>
+                    <div className="w-px h-3 bg-white/10 mx-auto my-0.5" />
+                    <p className="text-[10px] text-amber-300/80 tabular-nums leading-tight font-semibold">
+                      {block.suggested_time}
+                    </p>
+                  </div>
+
+                  {/* Task info */}
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-1.5 mb-0.5">
+                      <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${priorityDot[block.priority] ?? 'bg-white/20'}`} />
+                      <p className="text-xs font-medium text-rose-200 truncate">{block.title}</p>
+                    </div>
+                    <p className="text-[10px] text-rose-400/60 truncate">
+                      {block.message}
+                    </p>
+                    {/* Dynamic reason from backend slot-finder */}
+                    <span className="inline-flex items-center gap-1 mt-1 text-[9px] font-bold text-amber-400 bg-amber-500/10 border border-amber-500/20 px-1.5 py-0.5 rounded-full uppercase tracking-wide">
+                      ⚠ {block.reason || 'Reschedule suggested'}
+                    </span>
+                  </div>
+
+                  <ScoreBadge score={block.ai_score} />
+                </div>
+              ))}
+
+              {activeBlocks.length > 0 && (
+                <p className="text-[10px] font-black uppercase tracking-widest text-white/20 px-1 pt-2">
+                  Today's Schedule
+                </p>
+              )}
+            </>
+          )}
+
+          {/* ── STEP 5: Closed blocks — grey cards, no action ── */}
+          {closedBlocks.length > 0 && (
+            <>
+              <p className="text-[10px] font-black uppercase tracking-widest text-white/20 px-1 pt-1">
+                Submission Closed
+              </p>
+              {closedBlocks.map((block, i) => (
+                <div
+                  key={block.task_id || `closed-${i}`}
+                  className="flex items-center gap-3 p-2.5 rounded-lg border bg-white/[0.02] border-white/5 opacity-50"
+                >
+                  {/* Closed icon column */}
+                  <div className="shrink-0 text-center min-w-[60px]">
+                    <Ban size={14} className="mx-auto text-white/20 mb-0.5" />
+                    <p className="text-[9px] text-white/20 leading-tight">CLOSED</p>
+                  </div>
+
+                  {/* Task info */}
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-1.5 mb-0.5">
+                      <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${priorityDot[block.priority] ?? 'bg-white/10'}`} />
+                      <p className="text-xs font-medium text-white/30 truncate line-through">{block.title}</p>
+                    </div>
+                    <p className="text-[10px] text-white/20 truncate">{block.message}</p>
+                  </div>
+                </div>
+              ))}
+            </>
+          )}
+
+          {/* ── Active scheduled blocks ── */}
+          {activeBlocks.map((block, i) => (
             <div
               key={block.task_id || i}
-              className="flex items-center gap-3 p-2.5 rounded-lg bg-white/5 border border-white/10 hover:border-white/20 transition-all"
+              className={`flex items-center gap-3 p-2.5 rounded-lg border transition-all ${
+                block.starts_now
+                  ? 'bg-purple-500/10 border-purple-500/30 hover:border-purple-500/50'
+                  : 'bg-white/5 border-white/10 hover:border-white/20'
+              }`}
             >
-              {/* Time column */}
-              <div className="shrink-0 text-center min-w-[52px]">
-                <p className="text-[10px] font-bold text-blue-400 tabular-nums">{block.start}</p>
+              {/* Time column — 12h AM/PM */}
+              <div className="shrink-0 text-center min-w-[60px]">
+                <p className={`text-[10px] font-bold tabular-nums leading-tight ${
+                  block.starts_now ? 'text-purple-400' : 'text-blue-400'
+                }`}>{block.start}</p>
                 <div className="w-px h-3 bg-white/10 mx-auto my-0.5" />
-                <p className="text-[10px] text-white/30 tabular-nums">{block.end}</p>
+                <p className="text-[10px] text-white/30 tabular-nums leading-tight">{block.end}</p>
               </div>
+
               {/* Task info */}
               <div className="flex-1 min-w-0">
-                <p className="text-xs font-medium text-white/80 truncate">{block.title}</p>
-                {block.subject && (
-                  <p className="text-[10px] text-white/30 truncate">{block.subject}</p>
+                <div className="flex items-center gap-1.5 mb-0.5">
+                  {block.priority && (
+                    <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${priorityDot[block.priority] ?? 'bg-white/20'}`} />
+                  )}
+                  <p className="text-xs font-medium text-white/80 truncate">{block.title}</p>
+                </div>
+                <p className="text-[10px] text-white/30 truncate">
+                  {priorityLabel[block.priority] ?? 'Medium Priority'} · {block.duration} min
+                  {block.subject ? ` · ${block.subject}` : ''}
+                </p>
+                {/* STEP 6: "Starts now" only when backend confirms it AND type is active */}
+                {block.starts_now && block.type !== 'overdue' && (
+                  <span className="inline-flex items-center gap-1 mt-1 text-[9px] font-bold text-purple-400 bg-purple-500/10 border border-purple-500/20 px-1.5 py-0.5 rounded-full uppercase tracking-wide">
+                    ▶ Starts now
+                  </span>
+                )}
+                {block.day === 'tomorrow' && (
+                  <span className="inline-flex items-center gap-1 mt-1 text-[9px] font-bold text-blue-400 bg-blue-500/10 border border-blue-500/20 px-1.5 py-0.5 rounded-full uppercase tracking-wide">
+                    Tomorrow
+                  </span>
                 )}
               </div>
+
               <ScoreBadge score={block.ai_score} />
             </div>
           ))}
@@ -166,8 +321,11 @@ const SuggestedSection = memo(function SuggestedSection({ classId }) {
   const { data: rawTasks = [], isLoading, isError, refetch, isFetching } =
     useAIPriority(classId);
 
-  // Top 5 already sorted by backend; memoize slice for safety
-  const topTasks = useMemo(() => rawTasks.slice(0, 5), [rawTasks]);
+  // Top 5 already sorted by backend; filter closed tasks, then memoize slice
+  const topTasks = useMemo(
+    () => rawTasks.filter(t => !t.is_submission_closed && t.type !== 'closed').slice(0, 5),
+    [rawTasks]
+  );
 
   const priorityColors = {
     high:   'text-rose-400 bg-rose-500/10 border-rose-500/20',

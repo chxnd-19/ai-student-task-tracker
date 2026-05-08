@@ -19,8 +19,8 @@ export function WorkspaceProvider({ children }) {
     if (savedObj) {
       try {
         setActiveWorkspace(JSON.parse(savedObj));
-      } catch (e) {
-        console.warn("Failed to parse saved workspace object");
+      } catch {
+        // Ignore malformed localStorage value — will re-fetch on mount
       }
     }
   }, []);
@@ -33,13 +33,10 @@ export function WorkspaceProvider({ children }) {
     }
   }, [activeWorkspace]);
 
-  // 3. Safety timeout: Force loading false after 3 seconds
+  // 3. Safety timeout: force loading=false after 3s to prevent infinite spinner
   useEffect(() => {
     const timer = setTimeout(() => {
-      if (loading === true) {
-        console.warn("[WorkspaceProvider] Safety timeout reached.");
-        setLoading(false);
-      }
+      if (loading === true) setLoading(false);
     }, 3000);
     return () => clearTimeout(timer);
   }, [loading]);
@@ -56,17 +53,14 @@ export function WorkspaceProvider({ children }) {
         const fetchFn = user.role === 'teacher' ? fetchMyClasses : fetchJoinedClasses;
 
         try {
-          console.log(`[WorkspaceProvider] Fetching via: ${fetchFn.name}`);
           const { data } = await fetchFn();
           if (isMounted) setWorkspaces(data || []);
-        } catch (err) {
-          console.error("[WorkspaceProvider] Fetch failed:", err);
-          if (isMounted) setError('Failed to load workspaces.');
+        } catch {
+          if (isMounted) setError('Failed to load classes.');
         } finally {
           if (isMounted) setLoading(false);
         }
-      } catch (err) {
-        console.error("[WorkspaceProvider] Initialization failed:", err);
+      } catch {
         if (isMounted) setLoading(false);
       }
     };
@@ -108,7 +102,6 @@ export function WorkspaceProvider({ children }) {
       switchWorkspace(data);
       return data;
     } catch (err) {
-      console.error("[WorkspaceProvider] Creation failed:", err);
       throw err;
     }
   };

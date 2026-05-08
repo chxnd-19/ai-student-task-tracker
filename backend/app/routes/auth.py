@@ -1,10 +1,11 @@
 from fastapi import APIRouter, Request, HTTPException
-from app.schemas.auth import ForgotPasswordRequest, ResetPasswordRequest
-from app.schemas.auth import SignupRequest, LoginRequest
+from app.schemas.auth import ForgotPasswordRequest, ResetPasswordRequest, SignupRequest, LoginRequest
 from app.services import auth_service
 from app.database.connection import get_db
 from app.utils.rate_limit import get_real_ip
+import logging
 
+logger = logging.getLogger(__name__)
 router = APIRouter(tags=["Auth"])
 
 
@@ -26,8 +27,8 @@ async def login(payload: LoginRequest, request: Request):
         return await auth_service.login(payload, db, ip=get_real_ip(request))
     except HTTPException:
         raise
-    except Exception as e:
-        print(f"LOGIN ERROR: {e}")
+    except Exception as exc:
+        logger.exception(f"[auth] Unexpected login error: {exc}")
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
@@ -38,8 +39,8 @@ async def forgot_password(payload: ForgotPasswordRequest, request: Request):
         return await auth_service.forgot_password(payload, db, ip=get_real_ip(request))
     except HTTPException:
         raise
-    except Exception as e:
-        print(f"FORGOT PASSWORD ERROR: {e}")
+    except Exception as exc:
+        logger.exception(f"[auth] Unexpected forgot-password error: {exc}")
         raise HTTPException(status_code=500, detail="Failed to process request")
 
 
@@ -50,6 +51,6 @@ async def reset_password(token: str, payload: ResetPasswordRequest, request: Req
         return await auth_service.reset_password(token, payload, db, ip=get_real_ip(request))
     except HTTPException:
         raise
-    except Exception as e:
-        print(f"RESET PASSWORD ERROR: {e}")
+    except Exception as exc:
+        logger.exception(f"[auth] Unexpected reset-password error: {exc}")
         raise HTTPException(status_code=500, detail="Failed to reset password")

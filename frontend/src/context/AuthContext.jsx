@@ -10,8 +10,7 @@ export const AuthProvider = ({ children }) => {
       if (!token) return null;
       const stored = localStorage.getItem('user');
       return stored ? JSON.parse(stored) : null;
-    } catch (err) {
-      console.error("Auth initialization error:", err);
+    } catch {
       return null;
     }
   });

@@ -18,6 +18,14 @@ settings = get_settings()
 logger   = logging.getLogger(__name__)
 
 
+def _score_to_grade(score: int) -> str:
+    if score >= 90: return "A"
+    if score >= 80: return "B"
+    if score >= 70: return "C"
+    if score >= 60: return "D"
+    return "F"
+
+
 def _oid(val: str) -> ObjectId:
     if not is_valid_object_id(str(val)):
         raise HTTPException(400, f"Invalid id: {val}")
@@ -86,21 +94,36 @@ async def submit_task(
     if file_url:
         set_fields["fileUrl"] = file_url
 
-    result = await db.submissions.find_one_and_update(
-        {"taskId": _oid(task_id), "studentId": _oid(user["id"])},
-        {
-            "$set":  set_fields,
-            "$push": {"versions": version_entry},
-            "$setOnInsert": {
-                "taskId":    _oid(task_id),
-                "studentId": _oid(user["id"]),
-                "createdAt": now,
-                "versions":  [],
+    # NOTE: $setOnInsert must NOT include "versions" — $push already touches
+    # that field and MongoDB raises ConflictingUpdateOperators if two operators
+    # reference the same path in a single update call.
+    # $push on a missing field creates the array automatically, so no
+    # initialisation is needed here.
+    logger.debug(f"[submission] saving task={task_id!r} student={user['id']!r}")
+
+    try:
+        result = await db.submissions.find_one_and_update(
+            {"taskId": _oid(task_id), "studentId": _oid(user["id"])},
+            {
+                "$set": set_fields,
+                "$push": {"versions": version_entry},
+                "$setOnInsert": {
+                    "taskId":    _oid(task_id),
+                    "studentId": _oid(user["id"]),
+                    "createdAt": now,
+                },
             },
-        },
-        upsert=True,
-        return_document=True,
-    )
+            upsert=True,
+            return_document=True,
+        )
+    except Exception as exc:
+        logger.exception(f"[submission] DB update failed task={task_id!r}: {exc}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Submission could not be saved: {exc}",
+        )
+
+    logger.info(f"[submission] saved id={result.get('_id')!r}")
 
     # Notify teacher
     task_doc = await db.tasks.find_one({"_id": _oid(task_id)}, {"createdBy": 1, "title": 1})
@@ -119,15 +142,33 @@ async def submit_task(
         f"status={'late' if is_late else 'on-time'}"
     )
 
-    # Real-time activity
-    from app.services.socket_service import emit_activity
+    # Fetch class name for activity metadata
+    class_name = None
     if task.get("classId"):
-        await emit_activity(
-            str(task["classId"]),
-            "submitted an assignment",
-            user["name"],
-            {"taskTitle": task["title"]}
-        )
+        cls_doc = await db.classes.find_one({"_id": task["classId"]}, {"name": 1})
+        if cls_doc:
+            class_name = cls_doc.get("name")
+
+    # Persist to activity log (this also emits "activity" socket event)
+    from app.services.activity_service import create_activity, log_activity
+    # Student's own feed entry
+    await create_activity(
+        db, user["id"],
+        "submission",
+        f"You submitted '{task.get('title', 'an assignment')}'",
+        {
+            "taskTitle": task.get("title", ""),
+            "taskId":    task_id,
+            "className": class_name,
+            "userName":  user.get("name", ""),
+        },
+    )
+    # Workspace-level activity (for socket broadcast to class room)
+    await log_activity(
+        db, user["id"], "submission.submit",
+        {"taskTitle": task.get("title", ""), "className": class_name, "userName": user.get("name", "")},
+        workspace_id=str(task["classId"]) if task.get("classId") else None
+    )
     
     return serialize_doc(result)
 
@@ -145,9 +186,14 @@ async def get_submissions_for_task(task_id: str, user: dict, db: AsyncIOMotorDat
     for sub in subs:
         sid = sub.get("studentId")
         if sid and is_valid_object_id(str(sid)):
-            u = await db.users.find_one({"_id": ObjectId(str(sid))}, {"name": 1, "email": 1})
+            u = await db.users.find_one({"_id": ObjectId(str(sid))}, {"name": 1, "email": 1, "profile": 1})
             if u:
-                sub["studentId"] = {"id": str(u["_id"]), "name": u["name"], "email": u["email"]}
+                sub["studentId"] = {
+                    "id":      str(u["_id"]),
+                    "name":    u.get("name"),
+                    "email":   u.get("email"),
+                    "profile": u.get("profile", {})
+                }
     return subs
 
 
@@ -197,17 +243,35 @@ async def get_class_analytics(class_id: str, user: dict, db: AsyncIOMotorDatabas
         missed    = max(0, total_students - submitted)
         rate      = round((submitted / total_students) * 100) if total_students > 0 else 0
 
+        # Average AI/teacher score — from aiFeedback.score on each submission
+        graded_scores = [
+            s["aiFeedback"]["score"]
+            for s in subs
+            if isinstance(s.get("aiFeedback"), dict)
+            and s["aiFeedback"].get("status") == "completed"
+            and s["aiFeedback"].get("score") is not None
+        ]
+        avg_score = round(sum(graded_scores) / len(graded_scores), 1) if graded_scores else None
+
+        logger.debug(
+            f"[analytics] task={task['_id']}  "
+            f"submissions={submitted}  pending={missed}  "
+            f"completion={rate}%  avgScore={avg_score}"
+        )
+
         task_stats.append({
             "taskId":         str(task["_id"]),
             "title":          task["title"],
             "subject":        task["subject"],
             "dueDate":        task["dueDate"].isoformat() if hasattr(task["dueDate"], "isoformat") else str(task["dueDate"]),
             "totalStudents":  total_students,
+            # canonical field names — frontend reads these directly
             "submitted":      submitted,
             "onTime":         on_time,
             "late":           late,
             "missed":         missed,
             "completionRate": rate,
+            "averageScore":   avg_score,   # None when no graded submissions yet
         })
 
     avg_completion    = round(sum(t["completionRate"] for t in task_stats) / len(task_stats)) if task_stats else 0
@@ -234,6 +298,134 @@ async def get_student_analytics(user: dict, db: AsyncIOMotorDatabase) -> dict:
     late      = sum(1 for s in subs if s.get("status") == "late")
     resubmits = sum(1 for s in subs if len(s.get("versions", [])) > 1)
     return {"total": total, "onTime": on_time, "late": late, "resubmits": resubmits, "submissions": [serialize_doc(s) for s in subs]}
+
+
+# ── POST /api/submissions/:id/retry-grading ───────────────────────────────────
+async def reset_grading_status(
+    submission_id: str,
+    user: dict,
+    db: AsyncIOMotorDatabase,
+) -> dict:
+    """
+    Clear a failed aiFeedback so analyze_submission will re-run.
+    Only the teacher who owns the task may trigger this.
+    """
+    sub = await db.submissions.find_one({"_id": _oid(submission_id)})
+    if not sub:
+        raise HTTPException(404, "Submission not found.")
+
+    task = await db.tasks.find_one({
+        "_id": sub["taskId"],
+        "createdBy": _oid(user["id"]),
+    })
+    if not task:
+        raise HTTPException(403, "You do not own the task for this submission.")
+
+    current_status = (sub.get("aiFeedback") or {}).get("status")
+    if current_status == "completed":
+        raise HTTPException(409, "Submission is already graded. Retry not needed.")
+
+    result = await db.submissions.find_one_and_update(
+        {"_id": _oid(submission_id)},
+        {"$set": {
+            "aiFeedback.status":   "pending",
+            "aiFeedback.feedback": "Re-evaluation in progress…",
+        }},
+        return_document=True,
+    )
+    return serialize_doc(result)
+
+
+# ── PUT /api/submissions/:id/grade ────────────────────────────────────────────
+async def override_grade(
+    submission_id: str,
+    payload: dict,
+    user: dict,
+    db: AsyncIOMotorDatabase,
+) -> dict:
+    """
+    Teacher override for AI grading.
+    Validates the teacher owns the task, then updates aiFeedback fields.
+    """
+    sub = await db.submissions.find_one({"_id": _oid(submission_id)})
+    if not sub:
+        raise HTTPException(404, "Submission not found.")
+
+    # Verify the teacher owns the task this submission belongs to
+    task = await db.tasks.find_one({
+        "_id": sub["taskId"],
+        "createdBy": _oid(user["id"]),
+    })
+    if not task:
+        raise HTTPException(403, "You do not own the task for this submission.")
+
+    score    = payload.get("score")
+    feedback = payload.get("feedback", "").strip()
+
+    if score is None:
+        raise HTTPException(400, "score is required.")
+    try:
+        score = int(score)
+        if not (0 <= score <= 100):
+            raise ValueError
+    except (ValueError, TypeError):
+        raise HTTPException(400, "score must be an integer between 0 and 100.")
+
+    update = {
+        # Keep original AI feedback intact — only update the override fields
+        "aiFeedback.score":       score,
+        "aiFeedback.feedback":    feedback,
+        "aiFeedback.graded_by":   "teacher",
+        "aiFeedback.status":      "completed",
+        # finalGrade is the authoritative grade shown to students
+        "finalGrade": {
+            "score":      score,
+            "grade":      _score_to_grade(score),
+            "feedback":   feedback,
+            "graded_by":  "teacher",
+            "status":     "completed",
+        },
+        "reviewedByTeacher": True,
+        "updatedAt":         datetime.now(timezone.utc),
+    }
+    if "strengths" in payload:
+        update["aiFeedback.strengths"] = [str(s) for s in payload["strengths"]]
+    if "improvements" in payload:
+        update["aiFeedback.improvements"] = [str(s) for s in payload["improvements"]]
+    if "suggestions" in payload:
+        update["aiFeedback.suggestions"] = [str(s) for s in payload["suggestions"]]
+
+    result = await db.submissions.find_one_and_update(
+        {"_id": _oid(submission_id)},
+        {"$set": update},
+        return_document=True,
+    )
+
+    logger.info(
+        f"[submission] Teacher={user['id']!r} overrode grade for "
+        f"submission={submission_id!r} score={score}"
+    )
+
+    # Activity entry for the student
+    try:
+        from app.services.activity_service import create_activity
+        student_id = sub.get("studentId")
+        task_title = task.get("title", "an assignment")
+        await create_activity(
+            db, student_id,
+            "feedback",
+            f"Teacher added feedback on '{task_title}': {score}/100",
+            {
+                "taskTitle": task_title,
+                "taskId":    str(sub.get("taskId", "")),
+                "score":     score,
+                "userName":  user.get("name", "Instructor"),
+            },
+        )
+    except Exception:
+        pass   # fire-and-forget
+
+    return serialize_doc(result)
 
 
 # ── GET /api/submissions/reminders ────────────────────────────────────────────

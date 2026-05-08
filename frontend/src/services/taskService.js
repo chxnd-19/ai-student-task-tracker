@@ -41,7 +41,7 @@ export const fetchStudents = async (workspaceId) => {
 };
 
 export const fetchStudentById = async (id) => {
-  const res = await api.get(`${BASE}/students/${id}`);
+  const res = await api.get(`/api/profile/${id}`);
   return { data: res.data.data };
 };
 

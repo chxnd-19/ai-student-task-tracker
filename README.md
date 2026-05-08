@@ -1,6 +1,8 @@
-# EduTracker — Student Task Tracker
+# ScholarOS
 
-A production-ready full-stack academic task management platform with role-based dashboards, real-time updates, and analytics.
+ScholarOS is an AI-powered academic workflow and evaluation platform designed to streamline assignment management, intelligent grading, instructor reviews, analytics, and student performance tracking.
+
+> **Smarter Learning. Intelligent Evaluation.**
 
 ---
 
@@ -17,7 +19,7 @@ A production-ready full-stack academic task management platform with role-based 
 - Create, edit, delete assignments with **priority levels** (Low / Medium / High)
 - Search and filter assignments by title or priority
 - View student submissions per assignment
-- **Analytics section**: completion rate, average grade, total tasks, student count
+- **Analytics section**: completion rate, grade distribution, best/weakest assignment, class average
 - Real-time activity feed via Socket.IO
 
 ### Student Dashboard
@@ -28,11 +30,35 @@ A production-ready full-stack academic task management platform with role-based 
 - **Analytics section**: completion %, on-time rate, status breakdown bars
 - Real-time activity feed
 
+### AI Grading System
+- Automatic Gemini-powered evaluation on every text submission
+- Structured rubric scoring: Technical Accuracy, Implementation, Clarity, Innovation
+- Returns: score (0–100), letter grade (A–F), summary, strengths, weaknesses, suggestions
+- Confidence scoring: high / medium / low — low confidence flags instructor review
+- Grading runs as a **background task** — submission returns instantly
+- Instructor can approve AI grade or override with custom score and feedback
+- Final grade clearly shows "AI Generated" vs "Instructor Reviewed"
+- Retry grading available for failed evaluations
+
+### Smart Study Planner (Student)
+- AI-powered daily study schedule based on task priority and deadlines
+- IST timezone-aware scheduling — never schedules past midnight
+- Overdue tasks shown separately with intelligent reschedule suggestions
+- Closed/submitted tasks never appear in the planner
+- Confidence-based insights and workload warnings
+
+### Profile System
+- Structured student profiles: college, USN, department, semester, year, SGPA
+- Structured instructor profiles: college, qualification, department, contact
+- Profile completeness indicator
+- Persistent across sessions — stored in MongoDB `profile.*` subdocument
+
 ### UX
 - Skeleton loaders on every loading state (no blank screens)
 - Error states with retry buttons on every data fetch
 - Toast notifications on every API success and failure
-- Responsive glassmorphism dark UI
+- Grading timeline: Submitted → AI Graded → Instructor Reviewed → Finalized
+- Responsive glassmorphism dark enterprise UI
 
 ---
 
@@ -184,8 +210,8 @@ student-task-tracker/
 ### 1. Clone
 
 ```bash
-git clone https://github.com/chxnd-19/student-task-tracker.git
-cd student-task-tracker
+git clone https://github.com/chxnd-19/scholar-os.git
+cd scholar-os
 ```
 
 ### 2. Backend
@@ -220,13 +246,16 @@ Frontend: `http://localhost:3000`
 ### `backend/.env`
 
 ```env
-MONGO_URI=mongodb://localhost:27017/taskdb
-DB_NAME=taskdb
-JWT_SECRET=your_secure_random_string_here
+MONGO_URI=mongodb://localhost:27017/scholaros
+DB_NAME=scholaros
+JWT_SECRET=your_secure_random_string_here_min_32_chars
 PORT=5000
 ENVIRONMENT=development
 FRONTEND_URL=http://localhost:3000
+GEMINI_API_KEY=your_gemini_api_key_here
 ```
+
+> **Never commit `.env` to version control.** Use `.env.example` as a template.
 
 ### `frontend/.env.development`
 
@@ -311,8 +340,28 @@ npm run preview                  # Preview build
 
 ## Development Notes
 
+### Demo Data (Seed Script)
+Populate the database with realistic demo accounts, assignments, and AI-graded submissions:
+
+```bash
+cd backend
+python seed.py          # seed demo data
+python seed.py --wipe   # wipe and re-seed
+```
+
+Demo accounts created:
+
+| Role | Email | Password |
+|------|-------|----------|
+| Instructor | priya.sharma@scholaros.demo | Demo@1234 |
+| Student | arjun.mehta@scholaros.demo | Demo@1234 |
+| Student | sneha.patel@scholaros.demo | Demo@1234 |
+| Student | rahul.nair@scholaros.demo | Demo@1234 |
+
+Class join code: **DEMO01**
+
 ### Forgot Password (Dev Mode)
-No email service configured. The reset URL is returned in the API response and displayed as a clickable button in the UI. Replace with SendGrid/AWS SES for production.
+No email service configured. The reset URL is printed to the backend console and returned in the API response. Replace with SendGrid/AWS SES for production.
 
 ### Database Resilience
 Backend always starts even if MongoDB is down. Routes return `503` if DB is unavailable — no crash on startup.
@@ -324,66 +373,33 @@ Three levels: **Low**, **Medium**, **High**. Stored in MongoDB, displayed as col
 
 ## Deployment
 
-### Backend — Render
+### Docker (Recommended)
 
-1. Create a new **Web Service** on [render.com](https://render.com)
-2. Connect your GitHub repository
-3. Configure:
-   - **Root Directory**: `backend`
-   - **Build Command**: `pip install -r requirements.txt`
-   - **Start Command**: `uvicorn app.main:app --host 0.0.0.0 --port $PORT`
-4. Add environment variables in the Render dashboard:
-   ```
-   MONGO_URI=mongodb+srv://...
-   JWT_SECRET=your_secret_here
-   ENVIRONMENT=production
-   FRONTEND_URL=https://your-app.vercel.app
-   PORT=10000
-   DB_NAME=taskdb
-   ```
+```bash
+docker-compose up --build
+```
 
-### Frontend — Vercel
+Services started:
+- `backend` → http://localhost:5000
+- `frontend` → http://localhost:3000
+- MongoDB (if using local container)
 
-1. Import your GitHub repository on [vercel.com](https://vercel.com)
-2. Configure:
-   - **Root Directory**: `frontend`
-   - **Framework Preset**: Vite
-   - **Build Command**: `npm run build`
-   - **Output Directory**: `dist`
-3. Add environment variables:
-   ```
-   VITE_API_URL=https://your-backend.onrender.com
-   ```
-4. `vercel.json` is already included for SPA routing.
+### Manual Deployment
 
-### Pre-deploy checklist
+**Backend (e.g. Render / Railway):**
+1. Set environment variables from `backend/.env.example`
+2. Set `ENVIRONMENT=production`
+3. Set `FRONTEND_URL=https://your-frontend-domain.com`
+4. Start command: `uvicorn app.main:app --host 0.0.0.0 --port $PORT`
 
-- [ ] `MONGO_URI` points to Atlas (not localhost)
-- [ ] `JWT_SECRET` is a random 32+ character string
-- [ ] `ENVIRONMENT=production`
-- [ ] `FRONTEND_URL` matches your Vercel domain exactly
-- [ ] `VITE_API_URL` matches your Render URL (no trailing slash)
+**Frontend (e.g. Vercel / Netlify):**
+1. Set `VITE_API_URL=https://your-backend-domain.com`
+2. Build command: `npm run build`
+3. Output directory: `dist`
 
 ---
 
-## TanStack Query
-
-Data fetching is managed by [TanStack Query v5](https://tanstack.com/query/latest):
-
-| Hook | Purpose |
-|------|---------|
-| `useClasses()` | Fetch user's classes with caching + refetch on focus |
-| `useJoinClass()` | Mutation — join class, update cache optimistically |
-| `useCreateClass()` | Mutation — create class, append to cache |
-| `useTasks(params)` | Fetch paginated tasks for a class |
-| `useTaskSummary(classId)` | Fetch student task status counts |
-| `useCreateTask()` | Mutation — create task, invalidate list |
-| `useUpdateTask()` | Mutation — update task, invalidate list |
-| `useDeleteTask()` | Mutation — delete task, remove from cache |
-
-Cache configuration: `staleTime: 30s`, `gcTime: 5min`, `retry: 1`, `refetchOnWindowFocus: true`
-
----
+## Future Improvements
 
 - [ ] Email integration (SendGrid / AWS SES)
 - [ ] Calendar view for task deadlines

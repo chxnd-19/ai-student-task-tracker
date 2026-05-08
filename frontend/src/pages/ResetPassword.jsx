@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { Sparkles, Lock, ArrowRight, ArrowLeft, CheckCircle } from 'lucide-react';
@@ -13,6 +13,11 @@ function ResetPassword() {
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState(false);
   const [error, setError] = useState('');
+
+  const timerRef = useRef(null);
+
+  // Cleanup redirect timer on unmount to prevent setState after unmount
+  useEffect(() => () => { if (timerRef.current) clearTimeout(timerRef.current); }, []);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -36,13 +41,8 @@ function ResetPassword() {
         password 
       });
       
-      console.log('Reset Password Response:', response.data.message);
       setSuccess(true);
-      
-      // Redirect to login after 3 seconds
-      setTimeout(() => {
-        navigate('/login');
-      }, 3000);
+      timerRef.current = setTimeout(() => navigate('/login'), 3000);
       
     } catch (err) {
       const errorMessage = err.response?.data?.detail || 

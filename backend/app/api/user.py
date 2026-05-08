@@ -4,8 +4,10 @@ from app.utils.dependencies import get_current_user
 from app.utils.responses import ok, ok_msg
 from app.utils.password import hash_password
 from app.utils.object_id import to_object_id
+import logging
 
-router = APIRouter(prefix="/profile", tags=["Profile"])
+logger = logging.getLogger(__name__)
+router = APIRouter(prefix="/settings", tags=["Settings"])
 
 @router.put("", summary="Update user profile")
 async def update_profile(
@@ -55,5 +57,5 @@ async def update_profile(
     except HTTPException:
         raise
     except Exception as e:
-        print(f"UPDATE PROFILE ERROR: {e}")
+        logger.exception(f"[user] Profile update error: {e}")
         raise HTTPException(status_code=500, detail="Failed to update profile")

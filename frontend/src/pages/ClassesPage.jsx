@@ -18,8 +18,8 @@ function ClassesPage() {
       try {
         const res = await api.get("/api/classes");
         setWorkspaces(res.data.data || []);
-      } catch (err) {
-        console.error("Failed to fetch classes:", err);
+      } catch {
+        // Non-fatal — error state is shown via setLoadError
       } finally {
         setLoading(false);
       }
@@ -45,7 +45,7 @@ function ClassesPage() {
             <span>Academic Registry</span>
           </div>
           <h1 className="text-5xl font-black tracking-tight text-white">
-            My <span className="bg-gradient-to-r from-purple-400 to-pink-400 bg-clip-text text-transparent">Workspaces</span>
+            My <span className="bg-gradient-to-r from-purple-400 to-pink-400 bg-clip-text text-transparent">Classes</span>
           </h1>
           <p className="text-white/40 mt-2 font-medium">You are enrolled in <span className="text-white">{workspaces.length} active classes</span>.</p>
         </header>
@@ -77,11 +77,11 @@ function ClassesPage() {
                       {cls.name[0]}
                     </div>
                     <div 
-                      onClick={(e) => copyToClipboard(e, cls.code)}
+                      onClick={(e) => copyToClipboard(e, cls.joinCode)}
                       className="px-3 py-1.5 rounded-xl bg-white/5 border border-white/5 text-[10px] font-mono text-purple-400 flex items-center gap-2 cursor-pointer hover:bg-white/10 transition-all"
                     >
-                      {cls.code}
-                      {copiedCode === cls.code ? <Check size={12} className="text-emerald-400" /> : <Copy size={12} className="text-white/20" />}
+                      {cls.joinCode || '—'}
+                      {copiedCode === cls.joinCode ? <Check size={12} className="text-emerald-400" /> : <Copy size={12} className="text-white/20" />}
                     </div>
                   </div>
 

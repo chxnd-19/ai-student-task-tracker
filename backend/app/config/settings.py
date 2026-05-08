@@ -9,7 +9,7 @@ from functools import lru_cache
 class Settings(BaseSettings):
     # ── MongoDB ───────────────────────────────────────────────────────────────
     MONGO_URI: str
-    DB_NAME: str = "student-task-tracker"
+    DB_NAME: str = "scholaros"
 
     # ── JWT ───────────────────────────────────────────────────────────────────
     JWT_SECRET: str
@@ -51,6 +51,11 @@ class Settings(BaseSettings):
 
     # ── Dashboard / summary cache ─────────────────────────────────────────────
     CACHE_TTL_SECONDS: int = 60   # How long task-summary results are cached per user
+
+    # ── AI Grading ────────────────────────────────────────────────────────────
+    # Get your key at: https://aistudio.google.com/app/apikey
+    GEMINI_API_KEY: str | None = None
+
     # ── Alerting (optional) ───────────────────────────────────────────────────
     ALERT_WEBHOOK_URL: str | None = None
 

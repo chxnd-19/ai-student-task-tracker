@@ -12,6 +12,8 @@ import StudentDashboard  from './pages/StudentDashboard';
 import ClassesPage       from './pages/ClassesPage';
 import ClassDetailsPage  from './pages/ClassDetailsPage';
 import SettingsPage      from './pages/SettingsPage';
+import Profile           from './pages/Profile';
+import StudentProfileView from './pages/StudentProfileView';
 
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { WorkspaceProvider }     from './context/WorkspaceProvider';
@@ -102,6 +104,12 @@ function AppContent() {
       } />
       <Route path="/settings" element={
         <PrivateRoute><SettingsPage /></PrivateRoute>
+      } />
+      <Route path="/profile" element={
+        <PrivateRoute><Profile /></PrivateRoute>
+      } />
+      <Route path="/student/:id" element={
+        <RoleRoute roles={['teacher']}><StudentProfileView /></RoleRoute>
       } />
 
       {/* ── Legacy redirects (keep old URLs working) ───────────────────────── */}

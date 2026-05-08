@@ -37,3 +37,8 @@ export const fetchReminders = async () => {
   const res = await api.get(`${BASE}/reminders`);
   return { data: res.data.data };
 };
+
+export const retryGrading = async (submissionId) => {
+  const res = await api.post(`${BASE}/${submissionId}/retry-grading`);
+  return { data: res.data.data };
+};

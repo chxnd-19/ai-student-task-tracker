@@ -16,7 +16,9 @@ from app.services import auth_service
 from app.database.connection import get_db
 from app.utils.responses import ok
 from app.config.settings import get_settings
+import logging
 
+logger   = logging.getLogger(__name__)
 settings = get_settings()
 router   = APIRouter(tags=["Auth"])
 
@@ -91,9 +93,7 @@ async def login(payload: LoginRequest, request: Request):
         raise
 
     except Exception as e:
-        # Log the real error on the server
-        print(f"LOGIN ERROR: {str(e)}")
-        # Return a generic 500 to the client
+        logger.exception(f"[auth] Unexpected login error: {e}")
         raise HTTPException(
             status_code=500,
             detail="Internal server error"
@@ -103,8 +103,6 @@ async def login(payload: LoginRequest, request: Request):
 @router.post("/forgot-password")
 async def forgot_password(payload: ForgotPasswordRequest, request: Request):
     """Request a password reset token."""
-    print("🚀 FORGOT PASSWORD ROUTE HIT!")
-    print(f"📧 Email received: {payload.email}")
     try:
         db = get_db()
         result = await auth_service.forgot_password(payload, db, ip=get_real_ip(request))
@@ -112,7 +110,7 @@ async def forgot_password(payload: ForgotPasswordRequest, request: Request):
     except HTTPException:
         raise
     except Exception as e:
-        print(f"FORGOT PASSWORD ERROR: {str(e)}")
+        logger.exception(f"[auth] Unexpected forgot-password error: {e}")
         raise HTTPException(
             status_code=500,
             detail="Failed to process forgot password request"
@@ -143,9 +141,7 @@ async def reset_password(token: str, payload: ResetPasswordRequest, request: Req
         raise
 
     except Exception as e:
-        # Log the real error on the server
-        print(f"RESET PASSWORD ERROR: {str(e)}")
-        # Return a generic 500 to the client
+        logger.exception(f"[auth] Unexpected reset-password error: {e}")
         raise HTTPException(
             status_code=500,
             detail="Failed to reset password"

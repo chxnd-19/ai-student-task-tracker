@@ -106,11 +106,32 @@ export function useSocket(workspaceId, userId) {
 
     socket.emit('join_workspace', { workspaceId });
 
-    // ── Activity feed (local state — not cached) ──────────────────────────
-    const onActivity = (data) => {
-      setActivities(prev => [data, ...prev].slice(0, 50));
-      // Also invalidate the user-scoped activity query so the feed refreshes
-      queryClient.invalidateQueries({ queryKey: ['activity', userId] });
+    // ── Activity feed — prepend to cache immediately, then invalidate ────────
+    const onActivity = (activity) => {
+      // Prepend the real-time activity object directly into the cache.
+      // This ensures the feed updates instantly without waiting for a refetch.
+      queryClient.setQueriesData(
+        { queryKey: ['activity', userId] },
+        (old) => {
+          if (!old) return old;
+          const existing = old.data ?? [];
+          
+          // Deduplicate: don't add if the activity ID already exists
+          const isDupe = existing.some(e => e._id === activity._id);
+          if (isDupe) return old;
+
+          return {
+            ...old,
+            data: [activity, ...existing].slice(0, 50),
+          };
+        }
+      );
+
+      // Schedule a background refetch to ensure data consistency
+      queryClient.invalidateQueries({
+        queryKey:    ['activity', userId],
+        refetchType: 'inactive',
+      });
     };
 
     // ── Step 1: Optimistic task_created ───────────────────────────────────
@@ -139,6 +160,8 @@ export function useSocket(workspaceId, userId) {
         refetchType: 'inactive', // only refetch pages not currently rendered
       });
       queryClient.invalidateQueries({ queryKey: ['tasks', 'summary', workspaceId] });
+      // Also refresh activity feed — a new task means new activity entries for students
+      queryClient.invalidateQueries({ queryKey: ['activity', userId] });
     };
 
     // ── task_updated: optimistic patch ────────────────────────────────────
@@ -187,11 +210,22 @@ export function useSocket(workspaceId, userId) {
     socket.on('task_updated', onTaskUpdated);
     socket.on('task_deleted', onTaskDeleted);
 
+    // ── submission / graded / feedback → refresh activity feed ───────────────
+    const onActivityInvalidate = () => {
+      queryClient.invalidateQueries({ queryKey: ['activity', userId] });
+    };
+    socket.on('submission', onActivityInvalidate);
+    socket.on('graded',     onActivityInvalidate);
+    socket.on('feedback',   onActivityInvalidate);
+
     return () => {
       socket.off('activity',     onActivity);
       socket.off('task_created', onTaskCreated);
       socket.off('task_updated', onTaskUpdated);
       socket.off('task_deleted', onTaskDeleted);
+      socket.off('submission',   onActivityInvalidate);
+      socket.off('graded',       onActivityInvalidate);
+      socket.off('feedback',     onActivityInvalidate);
     };
   }, [workspaceId, userId]);
 

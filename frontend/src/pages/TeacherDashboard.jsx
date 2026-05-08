@@ -1,14 +1,14 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import api from '../services/api';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
   Plus, Users, BookOpen, BarChart3, Trash2, Edit3, Copy, Check, X,
-  Calendar as CalendarIcon, Layers, ChevronRight, TrendingUp, Target, Sparkles,
+  Calendar as CalendarIcon, ChevronRight, TrendingUp, Target, Sparkles,
 } from 'lucide-react';
 import { fetchTasks, createTask, updateTask, deleteTask, fetchStudents } from '../services/taskService';
-import { fetchSubmissionsForTask, fetchClassAnalytics } from '../services/submissionService';
+import { fetchClassAnalytics } from '../services/submissionService';
 import SubmissionList from '../components/SubmissionList';
-import LiveActivityPanel from '../components/LiveActivityPanel';
+import ActivityFeed from '../components/ActivityFeed';
 import { useSocket } from '../hooks/useSocket';
 import { useToast } from '../hooks/useToast';
 import Toast from '../components/Toast';
@@ -30,6 +30,7 @@ function TeacherDashboard() {
   const [loadError, setLoadError]           = useState(null);
   const [tasksLoading, setTasksLoading]     = useState(false);
   const [tasks, setTasks]                   = useState([]);
+  const [tasksTotal, setTasksTotal]         = useState(0);
   const [form, setForm]                     = useState(emptyTask);
   const [editId, setEditId]                 = useState(null);
   const [showForm, setShowForm]             = useState(false);
@@ -43,27 +44,20 @@ function TeacherDashboard() {
   const [completionRate, setCompletionRate] = useState(0);
   const [searchQuery, setSearchQuery]       = useState('');
   const [filterPriority, setFilterPriority] = useState('all');
-  const { activities = [] } = useSocket(activeWorkspace?._id);
-  // Calculate average grade from analytics
+  const { activities = [] } = useSocket(activeWorkspace?._id, user?.id);
+  // Calculate average grade from analytics (averageScore is 0–100)
   const calculateAverageGrade = useCallback((analyticsData) => {
-    const taskAnalytics = Object.values(analyticsData);
+    const taskAnalytics = Object.values(analyticsData || {});
     if (taskAnalytics.length === 0) return '--';
-    
-    let totalScore = 0;
-    let count = 0;
-    
-    taskAnalytics.forEach(task => {
-      if (task.averageScore !== undefined && task.averageScore !== null) {
-        totalScore += task.averageScore;
-        count++;
-      }
-    });
-    
-    if (count === 0) return '--';
-    
-    const avg = totalScore / count;
-    
-    // Convert to letter grade
+
+    const scores = taskAnalytics
+      .map(t => t.averageScore)
+      .filter(s => s !== null && s !== undefined);
+
+    if (scores.length === 0) return '--';
+
+    const avg = scores.reduce((a, b) => a + b, 0) / scores.length;
+
     if (avg >= 90) return 'A';
     if (avg >= 80) return 'B';
     if (avg >= 70) return 'C';
@@ -71,19 +65,63 @@ function TeacherDashboard() {
     return 'F';
   }, []);
 
-  // Calculate completion rate
+  // Calculate completion rate using real submission counts from analytics
   const calculateCompletionRate = useCallback((analyticsData, totalStudents, totalTasks) => {
-    if (totalStudents === 0 || totalTasks === 0) return 0;
-    
+    if (!totalStudents || !totalTasks) return 0;
+
     const totalPossible = totalStudents * totalTasks;
     let totalSubmissions = 0;
-    
-    Object.values(analyticsData).forEach(task => {
-      totalSubmissions += (task.submissions || 0);
+
+    Object.values(analyticsData || {}).forEach(task => {
+      // backend field is "submitted", not "submissions"
+      totalSubmissions += (task.submitted ?? 0);
     });
-    
+
     return Math.round((totalSubmissions / totalPossible) * 100);
   }, []);
+
+  // ── Grade distribution — derived from analytics averageScore per task ──────
+  const gradeDistribution = useMemo(() => {
+    const scores = Object.values(analytics)
+      .map(t => t.averageScore)
+      .filter(s => s !== null && s !== undefined);
+    if (scores.length === 0) return null;
+    const dist = { A: 0, B: 0, C: 0, D: 0, F: 0 };
+    scores.forEach(s => {
+      if (s >= 90)      dist.A++;
+      else if (s >= 80) dist.B++;
+      else if (s >= 70) dist.C++;
+      else if (s >= 60) dist.D++;
+      else              dist.F++;
+    });
+    const total = scores.length;
+    return Object.entries(dist).map(([grade, count]) => ({
+      grade,
+      count,
+      pct: total > 0 ? Math.round((count / total) * 100) : 0,
+    }));
+  }, [analytics]);
+
+  // ── Class performance insights — derived from AI feedback weaknesses ────────
+  const classInsights = useMemo(() => {
+    // Collect all improvement strings from analytics (averageScore + task title)
+    const taskList = Object.values(analytics);
+    if (taskList.length === 0) return null;
+
+    const avgScores = taskList
+      .filter(t => t.averageScore !== null && t.averageScore !== undefined)
+      .map(t => t.averageScore);
+
+    if (avgScores.length === 0) return null;
+
+    const overallAvg = Math.round(avgScores.reduce((a, b) => a + b, 0) / avgScores.length);
+    const topTask    = taskList.reduce((best, t) =>
+      (t.averageScore ?? 0) > (best.averageScore ?? 0) ? t : best, taskList[0]);
+    const weakTask   = taskList.reduce((worst, t) =>
+      (t.averageScore ?? 100) < (worst.averageScore ?? 100) ? t : worst, taskList[0]);
+
+    return { overallAvg, topTask, weakTask };
+  }, [analytics]);
 
   const fetchWorkspaces = async () => {
     setLoading(true);
@@ -92,7 +130,7 @@ function TeacherDashboard() {
       const res = await api.get("/api/classes");
       setWorkspaces(res.data.data || []);
     } catch (err) {
-      setLoadError(err.response?.data?.message || 'Failed to load workspaces.');
+      setLoadError(err.response?.data?.message || 'Failed to load classes.');
     } finally {
       setLoading(false);
     }
@@ -112,9 +150,9 @@ function TeacherDashboard() {
       setWorkspaceName("");
       setShowClassModal(false);
       setWorkspaces(prev => [...prev, workspace]);
-      showToast(`Workspace "${workspace.name}" created!`);
+      showToast(`Class "${workspace.name}" created!`);
     } catch (err) {
-      showToast(err.response?.data?.message || "Failed to create workspace", "error");
+      showToast(err.response?.data?.message || "Failed to create class", "error");
     }
   };
 
@@ -127,14 +165,15 @@ function TeacherDashboard() {
         fetchClassAnalytics(cls._id),
         fetchStudents(cls._id)
       ]);
-      const tasksData = tRes.data || [];
-      const studentsData = sRes.data || [];
+      const tasksData    = tRes?.data    ?? [];
+      const studentsData = sRes?.data    ?? [];
       
       setTasks(tasksData);
+      setTasksTotal(tRes?.total ?? tasksData.length);
       setStudents(studentsData);
       
       const map = {};
-      (aRes.data?.tasks || []).forEach((t) => { 
+      (aRes?.data?.tasks ?? []).forEach((t) => { 
         if (t?.taskId) map[String(t.taskId)] = t; 
       });
       setAnalytics(map);
@@ -143,11 +182,11 @@ function TeacherDashboard() {
       const grade = calculateAverageGrade(map);
       setAvgGrade(grade);
       
-      // Calculate completion rate
-      const rate = calculateCompletionRate(map, studentsData.length, tasksData.length);
+      // Calculate completion rate using the real total (not just the current page)
+      const rate = calculateCompletionRate(map, studentsData.length, tRes?.total ?? tasksData.length);
       setCompletionRate(rate);
     } catch (err) {
-      console.error("[Dashboard] Session load failed:", err);
+      // loadWorkspaceData failure is non-fatal — tasks/analytics just won't show
     } finally {
       setTasksLoading(false);
     }
@@ -263,7 +302,7 @@ function TeacherDashboard() {
                   <BookOpen size={20} className="text-purple-400 mb-2" />
                   <p className="text-sm text-gray-400">Assignments</p>
                 </div>
-                <p className="text-3xl font-bold">{tasks.length}</p>
+                <p className="text-3xl font-bold">{tasksTotal}</p>
               </div>
             </div>
             
@@ -294,37 +333,13 @@ function TeacherDashboard() {
               <BarChart3 size={18} className="text-purple-400" />
               Class Analytics
             </h2>
-            <div className="grid grid-cols-2 gap-4 mb-4">
-              <div className="space-y-2">
-                <div className="flex justify-between text-xs text-gray-400">
-                  <span>Completion Rate</span>
-                  <span className="text-white font-semibold">{completionRate}%</span>
-                </div>
-                <div className="h-2 bg-white/10 rounded-full overflow-hidden">
-                  <div
-                    className="h-full bg-gradient-to-r from-purple-500 to-pink-500 rounded-full transition-all duration-700"
-                    style={{ width: `${completionRate}%` }}
-                  />
-                </div>
-              </div>
-              <div className="space-y-2">
-                <div className="flex justify-between text-xs text-gray-400">
-                  <span>Avg. Grade</span>
-                  <span className="text-white font-semibold">{avgGrade}</span>
-                </div>
-                <div className="h-2 bg-white/10 rounded-full overflow-hidden">
-                  <div
-                    className="h-full bg-gradient-to-r from-emerald-500 to-teal-500 rounded-full transition-all duration-700"
-                    style={{ width: avgGrade !== '--' ? `${['F','D','C','B','A'].indexOf(avgGrade) * 25}%` : '0%' }}
-                  />
-                </div>
-              </div>
-            </div>
-            <div className="grid grid-cols-3 gap-3">
+
+            {/* ── Summary stats ── */}
+            <div className="grid grid-cols-3 gap-3 mb-5">
               {[
-                { label: 'Total Tasks',   value: tasks.length,    color: 'text-purple-400' },
-                { label: 'Students',      value: students.length, color: 'text-blue-400'   },
-                { label: 'Completion',    value: `${completionRate}%`, color: 'text-emerald-400' },
+                { label: 'Total Tasks',  value: tasksTotal,           color: 'text-purple-400' },
+                { label: 'Students',     value: students.length,      color: 'text-blue-400'   },
+                { label: 'Completion',   value: `${completionRate}%`, color: 'text-emerald-400' },
               ].map(({ label, value, color }) => (
                 <div key={label} className="bg-white/5 rounded-xl p-3 border border-white/10 text-center">
                   <p className={`text-xl font-bold ${color}`}>{value}</p>
@@ -332,6 +347,102 @@ function TeacherDashboard() {
                 </div>
               ))}
             </div>
+
+            {/* ── Completion progress ── */}
+            <div className="space-y-2 mb-5">
+              <div className="flex justify-between text-xs text-gray-400">
+                <span>Completion Rate</span>
+                <span className="text-white font-semibold">{completionRate}%</span>
+              </div>
+              <div className="h-2 bg-white/10 rounded-full overflow-hidden">
+                <motion.div
+                  initial={{ width: 0 }}
+                  animate={{ width: `${completionRate}%` }}
+                  transition={{ duration: 0.8, ease: 'easeOut' }}
+                  className="h-full bg-gradient-to-r from-purple-500 to-pink-500 rounded-full"
+                />
+              </div>
+            </div>
+
+            {/* ── Grade distribution chart ── */}
+            {gradeDistribution ? (
+              <div className="mb-5">
+                <p className="text-[10px] font-black uppercase tracking-widest text-white/40 mb-3">
+                  Grade Distribution
+                </p>
+                <div className="space-y-2">
+                  {gradeDistribution.map(({ grade, count, pct }) => {
+                    const gradeColor = {
+                      A: 'bg-emerald-500',
+                      B: 'bg-teal-500',
+                      C: 'bg-amber-500',
+                      D: 'bg-orange-500',
+                      F: 'bg-rose-500',
+                    }[grade] ?? 'bg-white/20';
+                    const textColor = {
+                      A: 'text-emerald-400',
+                      B: 'text-teal-400',
+                      C: 'text-amber-400',
+                      D: 'text-orange-400',
+                      F: 'text-rose-400',
+                    }[grade] ?? 'text-white/40';
+                    return (
+                      <div key={grade} className="flex items-center gap-3">
+                        <span className={`text-xs font-black w-4 shrink-0 ${textColor}`}>{grade}</span>
+                        <div className="flex-1 h-2 bg-white/10 rounded-full overflow-hidden">
+                          <motion.div
+                            initial={{ width: 0 }}
+                            animate={{ width: `${pct}%` }}
+                            transition={{ duration: 0.6, ease: 'easeOut' }}
+                            className={`h-full rounded-full ${gradeColor}`}
+                          />
+                        </div>
+                        <span className="text-[10px] text-white/30 w-8 text-right shrink-0">
+                          {count > 0 ? `${pct}%` : '—'}
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            ) : (
+              <div className="mb-5 p-3 rounded-lg bg-white/[0.02] border border-white/5 text-center">
+                <p className="text-xs text-white/20">Grade distribution available after AI grading completes</p>
+              </div>
+            )}
+
+            {/* ── Class performance insights ── */}
+            {classInsights && (
+              <div className="space-y-2 pt-4 border-t border-white/5">
+                <p className="text-[10px] font-black uppercase tracking-widest text-white/40 mb-2">
+                  Performance Insights
+                </p>
+                <div className="grid grid-cols-1 gap-2">
+                  <div className="flex items-center justify-between p-2.5 rounded-lg bg-emerald-500/5 border border-emerald-500/10">
+                    <span className="text-xs text-white/50">Best performing assignment</span>
+                    <span className="text-xs font-bold text-emerald-400 truncate max-w-[140px]">
+                      {classInsights.topTask?.title ?? '—'}
+                      {classInsights.topTask?.averageScore != null && (
+                        <span className="ml-1 text-emerald-300">({classInsights.topTask.averageScore}/100)</span>
+                      )}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between p-2.5 rounded-lg bg-amber-500/5 border border-amber-500/10">
+                    <span className="text-xs text-white/50">Needs most attention</span>
+                    <span className="text-xs font-bold text-amber-400 truncate max-w-[140px]">
+                      {classInsights.weakTask?.title ?? '—'}
+                      {classInsights.weakTask?.averageScore != null && (
+                        <span className="ml-1 text-amber-300">({classInsights.weakTask.averageScore}/100)</span>
+                      )}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between p-2.5 rounded-lg bg-white/[0.02] border border-white/5">
+                    <span className="text-xs text-white/50">Overall class average</span>
+                    <span className="text-xs font-bold text-white/70">{classInsights.overallAvg}/100</span>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
 
           {/* ASSIGNMENTS */}
@@ -339,7 +450,7 @@ function TeacherDashboard() {
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-base font-semibold flex items-center gap-2">
                 <BookOpen size={18} className="text-purple-400" />
-                {activeWorkspace ? `Assignments in ${activeWorkspace.name}` : 'Select a Workspace'}
+                {activeWorkspace ? `Assignments in ${activeWorkspace.name}` : 'Select a Class'}
               </h2>
               {activeWorkspace && (
                 <button 
@@ -449,15 +560,15 @@ function TeacherDashboard() {
                       <div className="grid grid-cols-3 gap-2 mb-3">
                         <div className="bg-white/5 rounded-lg p-2 text-center border border-white/10">
                           <p className="text-xs text-gray-400">Submissions</p>
-                          <p className="text-lg font-semibold">{analyticsData.submissions || 0}</p>
+                          <p className="text-lg font-semibold">{analyticsData.submitted ?? 0}</p>
                         </div>
                         <div className="bg-white/5 rounded-lg p-2 text-center border border-white/10">
                           <p className="text-xs text-gray-400">Pending</p>
-                          <p className="text-lg font-semibold">{(students.length) - (analyticsData.submissions || 0)}</p>
+                          <p className="text-lg font-semibold">{analyticsData.missed ?? Math.max(0, (students?.length ?? 0) - (analyticsData.submitted ?? 0))}</p>
                         </div>
                         <div className="bg-white/5 rounded-lg p-2 text-center border border-white/10">
                           <p className="text-xs text-gray-400">Late</p>
-                          <p className="text-lg font-semibold text-rose-400">{analyticsData.lateSubmissions || 0}</p>
+                          <p className="text-lg font-semibold text-rose-400">{analyticsData.late ?? 0}</p>
                         </div>
                       </div>
 
@@ -482,14 +593,7 @@ function TeacherDashboard() {
 
           {/* LIVE ACTIVITY */}
           <div className="bg-white/5 backdrop-blur-md border border-white/10 rounded-xl p-5 hover:border-white/20 transition-all min-h-[120px]">
-            <h3 className="text-sm font-medium mb-3">Live Activity</h3>
-            {activities.length === 0 ? (
-              <div className="text-center text-gray-400 py-6">
-                <p className="text-sm">No recent activity</p>
-              </div>
-            ) : (
-              <LiveActivityPanel activities={activities} />
-            )}
+            <ActivityFeed limit={8} />
           </div>
         </div>
 
@@ -501,9 +605,11 @@ function TeacherDashboard() {
             <div className="bg-white/5 backdrop-blur-md border border-white/10 rounded-xl p-5 hover:border-white/20 transition-all">
               <h3 className="text-sm font-medium mb-3">Class Join Code</h3>
               <div className="bg-white/5 rounded-lg p-4 border border-white/10 mb-3 relative">
-                <span className="text-2xl font-mono font-bold text-purple-400 tracking-widest">{activeWorkspace.code}</span>
+                <span className="text-2xl font-mono font-bold text-purple-400 tracking-widest">
+                  {activeWorkspace.joinCode || '—'}
+                </span>
                 <button 
-                  onClick={() => copyJoinCode(activeWorkspace.code)}
+                  onClick={() => copyJoinCode(activeWorkspace.joinCode)}
                   className="absolute -right-2 -bottom-2 w-8 h-8 rounded-full bg-purple-500 text-white flex items-center justify-center shadow-lg hover:scale-110 transition-transform"
                 >
                   {copiedCode ? <Check size={14} /> : <Copy size={14} />}
@@ -513,10 +619,10 @@ function TeacherDashboard() {
             </div>
           )}
 
-          {/* WORKSPACES */}
+          {/* MY CLASSES */}
           <div className="bg-white/5 backdrop-blur-md border border-white/10 rounded-xl p-5 hover:border-white/20 transition-all">
             <div className="flex items-center justify-between mb-3">
-              <h3 className="text-sm font-medium">My Workspaces</h3>
+              <h3 className="text-sm font-medium">My Classes</h3>
               <button 
                 onClick={() => setShowClassModal(true)} 
                 className="text-xs text-purple-400 font-medium hover:text-purple-300 transition-colors"
@@ -551,7 +657,7 @@ function TeacherDashboard() {
                       {cls.name}
                     </p>
                     <p className="text-xs text-gray-400 flex items-center gap-1">
-                      <Users size={10} /> {cls.code}
+                      <Users size={10} /> {cls.joinCode || '—'}
                     </p>
                   </div>
                   
@@ -580,12 +686,12 @@ function TeacherDashboard() {
               className="relative w-full max-w-md glass-card p-10 bg-[#111827] border border-white/10 shadow-2xl"
             >
               <div className="flex items-center justify-between mb-8">
-                <h2 className="text-2xl font-black">Create Workspace</h2>
+                <h2 className="text-2xl font-black">Create Class</h2>
                 <button onClick={() => setShowClassModal(false)} className="text-white/20 hover:text-white transition-colors"><X size={24} /></button>
               </div>
               <form onSubmit={handleCreateWorkspace} className="space-y-8">
                 <div className="space-y-3">
-                  <label className="text-[10px] text-white/40 font-black uppercase tracking-[0.2em] px-1">Workspace Name</label>
+                  <label className="text-[10px] text-white/40 font-black uppercase tracking-[0.2em] px-1">Class Name</label>
                   <input
                     className="input-glass"
                     placeholder="e.g. Advanced Calculus"
@@ -594,7 +700,7 @@ function TeacherDashboard() {
                     required autoFocus
                   />
                 </div>
-                <button type="submit" className="btn-primary w-full h-14">Initialize Workspace</button>
+                <button type="submit" className="btn-primary w-full h-14">Create Class</button>
               </form>
             </motion.div>
           </div>

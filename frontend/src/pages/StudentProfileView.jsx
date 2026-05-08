@@ -70,9 +70,9 @@ export default function StudentProfileView() {
     );
   }
 
-  const { student, profile, stats } = data;
-  const initials = student.name?.split(' ').map((w) => w[0]).join('').slice(0, 2).toUpperCase() ?? '?';
-  const completionPct = stats.total > 0 ? Math.round((stats.submitted / stats.total) * 100) : 0;
+  const { user: studentUser, profile, stats } = data;
+  const initials = studentUser.name?.split(' ').map((w) => w[0]).join('').slice(0, 2).toUpperCase() ?? '?';
+  const completionPct = stats?.total > 0 ? Math.round((stats.submitted / stats.total) * 100) : 0;
 
   return (
     <motion.div
@@ -97,23 +97,20 @@ export default function StudentProfileView() {
             {initials}
           </div>
           <div className="flex-1">
-            <h1 className="text-3xl font-extrabold tracking-tight mb-1">{student.name}</h1>
+            <h1 className="text-3xl font-extrabold tracking-tight mb-1">{studentUser.name}</h1>
             <p className="text-muted text-sm flex items-center gap-2 mb-3">
-              <Mail size={14} /> {student.email}
+              <Mail size={14} /> {studentUser.email}
             </p>
-            {(profile.college || profile.department) && (
+            {(profile.college_name || profile.department) && (
               <p className="text-muted text-sm">
-                {[profile.college, profile.department].filter(Boolean).join(' · ')}
+                {[profile.college_name, profile.department].filter(Boolean).join(' · ')}
               </p>
             )}
-            {(profile.overallSGPA || profile.currentSGPA) && (
+            {profile.overall_sgpa && (
               <div className="flex gap-3 mt-3">
-                {profile.overallSGPA && (
-                  <span className="sgpa-chip">Overall SGPA: <strong>{profile.overallSGPA}</strong></span>
-                )}
-                {profile.currentSGPA && (
-                  <span className="sgpa-chip">Current SGPA: <strong>{profile.currentSGPA}</strong></span>
-                )}
+                <span className="px-3 py-1 rounded-lg bg-purple-500/10 border border-purple-500/20 text-purple-400 text-xs font-bold">
+                  Academic SGPA: {profile.overall_sgpa.toFixed(2)}
+                </span>
               </div>
             )}
           </div>
@@ -161,9 +158,9 @@ export default function StudentProfileView() {
               <h3 className="font-bold text-sm uppercase tracking-wider text-indigo-400">Personal Info</h3>
             </div>
             <div className="space-y-4">
-              <InfoRow icon={<User size={14} />}         label="Full Name"   value={profile.name || student.name} />
+              <InfoRow icon={<User size={14} />}         label="Full Name"   value={profile.full_name || studentUser.name} />
               <InfoRow icon={<Hash size={14} />}         label="USN"         value={profile.usn} />
-              <InfoRow icon={<Building2 size={14} />}    label="College"     value={profile.college} />
+              <InfoRow icon={<Building2 size={14} />}    label="College"     value={profile.college_name} />
               <InfoRow icon={<BookOpen size={14} />}     label="Department"  value={profile.department} />
             </div>
           </GlassCard>
@@ -177,8 +174,7 @@ export default function StudentProfileView() {
             <div className="space-y-4">
               <InfoRow icon={<GraduationCap size={14} />} label="Semester"       value={profile.semester} />
               <InfoRow icon={<GraduationCap size={14} />} label="Current Year"   value={profile.year} />
-              <InfoRow icon={<Award size={14} />}         label="Overall SGPA"   value={profile.overallSGPA} />
-              <InfoRow icon={<Award size={14} />}         label="Current SGPA"   value={profile.currentSGPA} />
+              <InfoRow icon={<Award size={14} />}         label="Overall SGPA"   value={profile.overall_sgpa} />
             </div>
           </GlassCard>
         </div>

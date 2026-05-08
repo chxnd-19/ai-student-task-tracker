@@ -23,30 +23,99 @@ from motor.motor_asyncio import AsyncIOMotorDatabase
 logger = logging.getLogger(__name__)
 
 
+async def create_activity(
+    db: AsyncIOMotorDatabase,
+    user_id: str | ObjectId,
+    activity_type: str,
+    message: str,
+    metadata: dict | None = None,
+) -> None:
+    """
+    Create a student-facing activity entry.
+
+    This is the primary function for writing to the activity feed.
+    Uses IST timezone for timestamps (matches the rest of the app).
+    Never raises — fire-and-forget.
+
+    Parameters
+    ----------
+    user_id       : the student (or user) who should see this activity
+    activity_type : e.g. "task_created", "submission", "graded", "feedback"
+    message       : human-readable description shown in the feed
+    metadata      : optional structured data (taskId, score, etc.)
+    """
+    try:
+        from zoneinfo import ZoneInfo
+        uid = ObjectId(str(user_id)) if not isinstance(user_id, ObjectId) else user_id
+
+        await db.activity_logs.insert_one({
+            "userId":    uid,
+            "action":    activity_type,
+            "message":   message,
+            "metadata":  metadata or {},
+            "timestamp": datetime.now(ZoneInfo("Asia/Kolkata")),
+        })
+    except Exception as exc:
+        logger.warning(f"[create_activity] Failed for type={activity_type!r}: {exc}")
+
+
 async def log_activity(
     db: AsyncIOMotorDatabase,
     user_id: str | ObjectId | None,
     action: str,
-    detail: dict | None = None,
+    metadata: dict | None = None,
     ip: str | None = None,
-) -> None:
+    workspace_id: str | None = None,
+) -> dict | None:
     """
-    Write an activity log entry.  Never raises — safe to call anywhere.
+    Write an activity log entry and optionally emit a real-time event.
+    Returns the created activity object (serialized) or None on failure.
     """
     try:
+        from app.utils.object_id import serialize_doc
         uid = None
         if user_id:
             uid = ObjectId(str(user_id)) if not isinstance(user_id, ObjectId) else user_id
 
-        await db.activity_logs.insert_one({
+        # Fetch user name if possible for better display
+        user_name = "Someone"
+        if uid:
+            user = await db.users.find_one({"_id": uid}, {"name": 1})
+            if user:
+                user_name = user.get("name", "Someone")
+
+        activity = {
             "userId":    uid,
+            "userName":  user_name,  # Added for frontend display convenience
             "action":    action,
-            "detail":    detail or {},
+            "metadata":  metadata or {},
             "ip":        ip,
-            "createdAt": datetime.now(timezone.utc),
-        })
+            "timestamp": datetime.now(timezone.utc),
+        }
+
+        # Insert into DB
+        await db.activity_logs.insert_one(activity)
+        
+        # Serialize for return and emission
+        activity_data = serialize_doc(activity)
+
+        # Real-time emission if workspace context exists
+        if workspace_id:
+            from app.services.socket_service import sio
+            try:
+                await sio.emit(
+                    "activity",
+                    activity_data,
+                    room=f"workspace:{workspace_id}",
+                )
+            except Exception as e:
+                logger.error(f"[socket] Failed to emit activity: {e}")
+
+        return activity_data
+
     except Exception as exc:
         logger.warning(f"[activity_log] Failed to write log for action={action!r}: {exc}")
+        return None
 
 
 async def get_activity_logs(
@@ -105,7 +174,7 @@ async def get_activity_logs(
         # Prefix match: "task" → /^task/i  (matches task.create, task.delete, …)
         filt["action"] = re.compile(f"^{re.escape(action)}", re.IGNORECASE)
 
-    # EXTENDED: date-range filter on createdAt
+    # EXTENDED: date-range filter on timestamp
     if date_from or date_to:
         date_filt: dict = {}
         if date_from:
@@ -114,7 +183,7 @@ async def get_activity_logs(
         if date_to:
             dt = date_to if date_to.tzinfo else date_to.replace(tzinfo=timezone.utc)
             date_filt["$lte"] = dt
-        filt["createdAt"] = date_filt
+        filt["timestamp"] = date_filt
 
     # ── Pagination ────────────────────────────────────────────────────────────
     page  = max(1, page)
@@ -123,7 +192,7 @@ async def get_activity_logs(
 
     # ── Query ─────────────────────────────────────────────────────────────────
     total  = await db.activity_logs.count_documents(filt)
-    cursor = db.activity_logs.find(filt).sort("createdAt", -1).skip(skip).limit(limit)
+    cursor = db.activity_logs.find(filt).sort("timestamp", -1).skip(skip).limit(limit)
     docs   = [serialize_doc(doc) async for doc in cursor]
 
     # totalPages is 0 when there are no results (avoids misleading "page 1 of 1")

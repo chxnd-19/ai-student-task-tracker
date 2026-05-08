@@ -80,9 +80,9 @@ function Signup({ onLogin }) {
             <Sparkles size={32} />
           </motion.div>
           <h1 className="text-3xl font-black tracking-tight text-white text-center">
-            Create <span className="bg-gradient-to-r from-purple-400 to-pink-400 bg-clip-text text-transparent">Account</span>
+            Join <span className="bg-gradient-to-r from-purple-400 to-pink-400 bg-clip-text text-transparent">ScholarOS</span>
           </h1>
-          <p className="text-white/40 mt-2 font-medium">Join our academic platform today</p>
+          <p className="text-white/40 mt-2 font-medium">AI-Powered Academic Workflow Platform</p>
         </div>
 
         {error && (

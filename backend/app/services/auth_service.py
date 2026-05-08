@@ -44,7 +44,6 @@ async def signup(
     # Check for existing email
     existing = await db.users.find_one({"email": email})
     if existing:
-        print(f"SIGNUP ERROR: User with email {email} already exists")
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="User already exists",
@@ -63,7 +62,7 @@ async def signup(
     try:
         result = await db.users.insert_one(user_to_insert)
         user_id = str(result.inserted_id)
-        print("User created:", user_id)
+        logger.info(f"[auth] User created: {user_id}")
     except Exception as exc:
         logger.exception(f"[auth] DB Insert failed for {email}: {exc}")
         raise HTTPException(
@@ -82,11 +81,13 @@ async def signup(
 
     # 5. Non-critical background tasks (wrapped separately)
     try:
-        await log_activity(db, user_id, "auth.signup", {"email": email, "role": role}, ip)
+        await log_activity(
+            db, user_id, "auth.signup",
+            {"email": email, "role": role}, ip
+        )
     except Exception:
-        pass # Activity logging shouldn't break the response
+        pass  # Activity logging is non-critical
 
-    print("Returning success")
     return {
         "success": True,
         "user": user_data,
@@ -112,22 +113,92 @@ async def login(
     try:
         email = payload.email.lower().strip()
 
-        # 1. Find user by email first
+        # Find user by exact normalised email
         user = await db.users.find_one({"email": email})
-        
-        # 2. If user not found
+
+        # Fallback — case-insensitive regex search catches emails stored with wrong casing
         if not user:
-            logger.warning(f"[auth] User not found for email={email} ip={ip}")
+            user = await db.users.find_one(
+                {"email": {"$regex": f"^{email}$", "$options": "i"}}
+            )
+            if user:
+                # Normalise the stored email so future exact lookups work
+                await db.users.update_one(
+                    {"_id": user["_id"]},
+                    {"$set": {"email": email}},
+                )
+                user["email"] = email
+
+        # Email not found after both attempts
+        if not user:
+            logger.warning(f"[auth] Login failed — no account for email={email} ip={ip}")
+
+            # ── Optional: check activity_logs for a recent email-change hint ──
+            # If the user changed their email, the old address may be in the audit log.
+            hint_email: str | None = None
+            try:
+                log_entry = await db.activity_logs.find_one(
+                    {
+                        "action": "auth.settings_email_change",
+                        "metadata.old_email": email,
+                    },
+                    sort=[("timestamp", -1)],
+                )
+                if log_entry:
+                    new_email: str = log_entry.get("metadata", {}).get("new_email", "")
+                    if new_email and new_email != email:
+                        # Mask: keep first 2 chars + domain, hide the rest
+                        local, _, domain = new_email.partition("@")
+                        masked = local[:2] + "***@" + domain if len(local) > 2 else "***@" + domain
+                        hint_email = masked
+            except Exception:
+                pass  # audit log is optional — never block login on this
+
             try:
                 await log_activity(db, None, "auth.login_failed", {"email": email, "reason": "user_not_found"}, ip)
             except Exception:
                 pass
+
+            detail_msg = (
+                "No account found with this email. "
+                "Check if you mistyped your email or sign up again."
+            )
+            headers: dict = {}
+            if hint_email:
+                headers["X-Email-Hint"] = hint_email
+
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail="User not found",
+                detail=detail_msg,
+                headers=headers or None,
             )
 
-        # 3. If password incorrect
+        # Role mismatch — checked BEFORE password for a clear error message
+        if payload.role and user["role"] != payload.role:
+            actual_display   = "Instructor" if user["role"] == "teacher" else "Student"
+            selected_display = "Instructor" if payload.role == "teacher" else "Student"
+            logger.warning(
+                f"[auth] Role mismatch for {email}: "
+                f"selected={payload.role} actual={user['role']} ip={ip}"
+            )
+            try:
+                await log_activity(db, user.get("_id"), "auth.login_failed", {
+                    "email": email,
+                    "reason": "role_mismatch",
+                    "selected_role": payload.role,
+                    "actual_role": user["role"],
+                }, ip)
+            except Exception:
+                pass
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail=(
+                    f"Account exists as {actual_display}, not {selected_display}."
+                ),
+                headers={"X-Actual-Role": user["role"]},
+            )
+
+        # Password check — only reached when email + role are both valid
         if not verify_password(payload.password, user["password"]):
             logger.warning(f"[auth] Invalid password for email={email} ip={ip}")
             try:
@@ -136,37 +207,11 @@ async def login(
                 pass
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Invalid credentials",
+                detail="Invalid credentials.",
             )
 
-        # 4. If role mismatch (when role is provided)
-        if payload.role and user["role"] != payload.role:
-            logger.warning(
-                f"[auth] Role mismatch for {email}: "
-                f"expected={payload.role} actual={user['role']}"
-            )
-            try:
-                await log_activity(db, user.get("_id"), "auth.login_failed", {
-                    "email": email, 
-                    "reason": "role_mismatch",
-                    "expected_role": payload.role,
-                    "actual_role": user["role"]
-                }, ip)
-            except Exception:
-                pass
-            
-            # Convert backend roles to frontend roles for user-friendly message
-            user_role_display = "INSTRUCTOR" if user["role"] == "teacher" else "STUDENT"
-            expected_role_display = "INSTRUCTOR" if payload.role == "teacher" else "STUDENT"
-            
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail=f"You are registered as a {user_role_display}, not {expected_role_display}",
-            )
-
+        logger.info(f"[auth] Login successful: {email} role={user['role']!r} ip={ip}")
         user_out = serialize_doc({k: v for k, v in user.items() if k != "password"})
-
-        logger.info(f"[auth] Login successful: {email} role={user_out['role']} ip={ip}")
         try:
             await log_activity(
                 db, user_out["id"], "auth.login",
@@ -220,14 +265,20 @@ async def forgot_password(
                 }},
             )
 
-            reset_url = f"http://localhost:3000/reset-password/{reset_token}"
-            print("=" * 60)
-            print(f"[DEV] PASSWORD RESET LINK — {email}")
-            print(f"[DEV] {reset_url}")
-            print("=" * 60)
+            reset_url = f"{settings.FRONTEND_URL}/reset-password/{reset_token}"
+            logger.info(f"[auth] Password reset link generated for {email}")
+            if not settings.is_production:
+                # Dev-only: print reset link to console since no email service is configured
+                print("=" * 60)
+                print(f"[DEV] PASSWORD RESET LINK — {email}")
+                print(f"[DEV] {reset_url}")
+                print("=" * 60)
 
             try:
-                await log_activity(db, str(user["_id"]), "auth.forgot_password", {"email": email}, ip)
+                await log_activity(
+                    db, str(user["_id"]), "auth.forgot_password",
+                    {"email": email}, ip
+                )
             except Exception:
                 pass
 
@@ -298,11 +349,10 @@ async def reset_password(
         )
         
         logger.info(f"[auth] Password reset successful for user: {user['email']}")
-        
-        # Log activity
+
         try:
             await log_activity(
-                db, str(user["_id"]), "auth.password_reset", 
+                db, str(user["_id"]), "auth.password_reset",
                 {"email": user["email"]}, ip
             )
         except Exception:

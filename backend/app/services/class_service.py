@@ -9,6 +9,7 @@ from motor.motor_asyncio import AsyncIOMotorDatabase
 
 from app.schemas.class_ import ClassCreate
 from app.utils.object_id import serialize_doc, is_valid_object_id
+from app.services.activity_service import log_activity
 
 
 def _oid(val: str) -> ObjectId:
@@ -49,7 +50,14 @@ async def create_class(payload: ClassCreate, user: dict, db: AsyncIOMotorDatabas
     }
     result = await db.classes.insert_one(doc)
     cls    = await db.classes.find_one({"_id": result.inserted_id})
-    print(f"[Backend] Workspace created: {cls.get('name')} (ID: {result.inserted_id})")
+
+    # Persist to activity log (this also emits "activity" socket event)
+    await log_activity(
+        db, user["id"], "class.create",
+        {"className": name},
+        workspace_id=str(result.inserted_id)
+    )
+
     return serialize_doc(cls)
 
 
@@ -76,9 +84,14 @@ async def get_joined_classes(user: dict, db: AsyncIOMotorDatabase) -> list:
     for cls in classes:
         tid = cls.get("teacherId")
         if tid and is_valid_object_id(str(tid)):
-            t = await db.users.find_one({"_id": ObjectId(str(tid))}, {"name": 1, "email": 1})
+            t = await db.users.find_one({"_id": ObjectId(str(tid))}, {"name": 1, "email": 1, "profile": 1})
             if t:
-                cls["teacherId"] = {"id": str(t["_id"]), "name": t["name"], "email": t["email"]}
+                cls["teacher"] = {
+                    "id":      str(t["_id"]),
+                    "name":    t.get("name"),
+                    "email":   t.get("email"),
+                    "profile": t.get("profile", {})
+                }
     return classes
 
 
@@ -100,15 +113,14 @@ async def join_class(join_code: str, user: dict, db: AsyncIOMotorDatabase) -> di
         {"$push": {"students": student_oid}, "$set": {"updatedAt": datetime.now(timezone.utc)}},
     )
     updated = await db.classes.find_one({"_id": cls["_id"]})
-    
-    # Real-time activity
-    from app.services.socket_service import emit_activity
-    await emit_activity(
-        str(cls["_id"]),
-        "joined the workspace",
-        user["name"]
+
+    # Persist to activity log (this also emits "activity" socket event)
+    await log_activity(
+        db, user["id"], "class.join",
+        {"className": cls.get("name", "")},
+        workspace_id=str(cls["_id"])
     )
-    
+
     return serialize_doc(updated)
 
 

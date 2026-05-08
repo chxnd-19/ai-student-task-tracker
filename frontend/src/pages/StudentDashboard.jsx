@@ -4,16 +4,18 @@ import {
   Clock, CheckCircle2, AlertCircle, TrendingUp,
   BookOpen, Users, Layers, ChevronRight, BarChart3, Flame,
 } from 'lucide-react';
-import { useQuery }                   from '@tanstack/react-query';
+import { useQuery, useQueryClient }    from '@tanstack/react-query';
 import { useClasses, useJoinClass }   from '../hooks/useClasses';
 import { useTasks, useTaskSummary }   from '../hooks/useTasks';
 import { fetchMySubmissions }         from '../services/submissionService';
 import SubmissionForm    from '../components/SubmissionForm';
+import AIFeedbackCard   from '../components/AIFeedbackCard';
 import ActivityFeed      from '../components/ActivityFeed';
 import Pagination        from '../components/Pagination';
 import AIInsights        from '../components/AIInsights';
 import { useSocket }     from '../hooks/useSocket';
 import { useToast }      from '../hooks/useToast';
+import { useProfile }    from '../hooks/useProfile';
 import Toast             from '../components/Toast';
 import { SkeletonDashboard } from '../components/SkeletonLoader';
 import ErrorState        from '../components/ErrorState';
@@ -24,6 +26,9 @@ import { useAuth }       from '../context/AuthContext';
 function StudentDashboard() {
   const { user } = useAuth();
   const { toast, showToast, clearToast } = useToast();
+  const { data: profileData } = useProfile();
+  const profile = profileData?.profile;
+  const qc = useQueryClient();
 
   const [activeWorkspace, setActiveWorkspace] = useState(null);
   const [activeTask, setActiveTask]           = useState(null);
@@ -103,6 +108,9 @@ function StudentDashboard() {
   const handleSubmitSuccess = () => {
     showToast('Submission successful! ✅');
     setActiveTask(null);
+    // Invalidate only the student's own submissions so the AI feedback
+    // card appears as soon as grading completes — no full dashboard reload.
+    qc.invalidateQueries({ queryKey: ['submissions', 'my'] });
   };
 
   // ── Analytics (memoized) ────────────────────────────────────────────────────
@@ -157,13 +165,25 @@ function StudentDashboard() {
       <Toast message={toast.message} type={toast.type} onClose={clearToast} />
 
       {/* HEADER */}
-      <div className="mb-6">
-        <h1 className="text-2xl font-semibold">
-          Welcome back, {user?.name?.split(' ')[0] || 'Student'}
-        </h1>
-        <p className="text-sm text-gray-400 mt-1">
-          {summary.pending} pending · {workspaces.length} classes
-        </p>
+      <div className="mb-6 flex justify-between items-end">
+        <div>
+          <h1 className="text-3xl font-black tracking-tight">
+            Welcome back, <span className="bg-gradient-to-r from-purple-400 to-pink-400 bg-clip-text text-transparent">{profile?.full_name || user?.name?.split(' ')[0] || 'Student'}</span>
+          </h1>
+          <p className="text-sm text-white/40 mt-1">
+            {profile?.department && <span className="font-bold text-white/60">{profile.department}</span>}
+            {profile?.semester && <span className="mx-2 opacity-20">|</span>}
+            {profile?.semester && <span className="font-bold text-white/60">Semester {profile.semester}</span>}
+            <span className="mx-3 opacity-10">/</span>
+            {summary.pending} pending · {workspaces.length} classes
+          </p>
+        </div>
+        {profile?.overall_sgpa && (
+          <div className="bg-white/5 border border-white/10 rounded-2xl px-5 py-3 text-right hidden md:block backdrop-blur-sm">
+            <p className="text-[10px] font-black uppercase tracking-widest text-purple-400 leading-none mb-1">Academic SGPA</p>
+            <p className="text-2xl font-black text-white leading-none">{profile.overall_sgpa.toFixed(2)}</p>
+          </div>
+        )}
       </div>
 
       {/* MAIN GRID */}
@@ -292,7 +312,7 @@ function StudentDashboard() {
               <div className="text-center text-gray-400 py-8">
                 <BookOpen size={32} className="mx-auto text-white/10 mb-3" />
                 <p className="text-sm font-medium">No assignments yet</p>
-                <p className="text-xs text-white/20 mt-1">Join a class to see your tasks here.</p>
+                <p className="text-xs text-white/20 mt-1">Join a class to see your ScholarOS assignments here.</p>
               </div>
             ) : filteredTasks.length === 0 ? (
               <div className="text-center text-gray-400 py-8">
@@ -311,13 +331,14 @@ function StudentDashboard() {
                   const sub    = getSubmission(task._id);
                   const status = getTaskStatus(task, sub);
                   const meta   = STATUS_META[status];
+                  const isOpen = activeTask?._id === task._id;
                   return (
-                    <div
-                      key={task._id}
-                      onClick={() => setActiveTask(activeTask?._id === task._id ? null : task)}
-                      className="bg-white/5 border border-white/10 rounded-lg p-4 hover:bg-white/10 hover:border-white/20 transition-all cursor-pointer"
-                    >
-                      <div className="flex items-center gap-4">
+                    <div key={task._id} className="bg-white/5 border border-white/10 rounded-lg overflow-hidden hover:border-white/20 transition-all">
+                      {/* ── Row header ──────────────────────────────────── */}
+                      <div
+                        onClick={() => setActiveTask(isOpen ? null : task)}
+                        className="p-4 flex items-center gap-4 cursor-pointer hover:bg-white/5 transition-all"
+                      >
                         <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-purple-500/20 to-pink-500/20 border border-white/10 flex items-center justify-center text-white/70 font-semibold text-sm shrink-0">
                           {task.title[0]}
                         </div>
@@ -340,13 +361,68 @@ function StudentDashboard() {
                               <Users size={12} />
                               {task.subject}
                             </span>
+                            {/* AI score badge — shown when graded */}
+                            {sub?.aiFeedback?.status === 'completed' && (
+                              <span className="flex items-center gap-1 text-purple-400 font-semibold">
+                                ✦ {sub.aiFeedback.score}/100 {sub.aiFeedback.grade}
+                              </span>
+                            )}
                           </div>
                         </div>
                         <ChevronRight
                           size={18}
-                          className={`text-white/30 transition-transform shrink-0 ${activeTask?._id === task._id ? 'rotate-90 text-purple-400' : ''}`}
+                          className={`text-white/30 transition-transform shrink-0 ${isOpen ? 'rotate-90 text-purple-400' : ''}`}
                         />
                       </div>
+
+                      {/* ── Expanded: submission form + AI feedback ──────── */}
+                      <AnimatePresence>
+                        {isOpen && (
+                          <motion.div
+                            initial={{ height: 0, opacity: 0 }}
+                            animate={{ height: 'auto', opacity: 1 }}
+                            exit={{ height: 0, opacity: 0 }}
+                            transition={{ duration: 0.2 }}
+                            className="overflow-hidden border-t border-white/5"
+                          >
+                            <div className="p-4 space-y-4">
+                              <SubmissionForm
+                                task={task}
+                                existingSubmission={sub}
+                                onClose={() => setActiveTask(null)}
+                                onSuccess={handleSubmitSuccess}
+                              />
+                              {sub?.aiFeedback && (
+                                <AIFeedbackCard
+                                  feedback={sub.aiFeedback}
+                                  finalGrade={sub.finalGrade}
+                                  reviewedByTeacher={sub.reviewedByTeacher}
+                                />
+                              )}
+                              {/* Version history — shown when student has resubmitted */}
+                              {(sub?.versions?.length ?? 0) > 1 && (
+                                <div className="pt-2">
+                                  <p className="text-[10px] font-black uppercase tracking-widest text-white/30 mb-2">
+                                    Submission History ({sub.versions.length} versions)
+                                  </p>
+                                  <div className="space-y-2">
+                                    {[...sub.versions].reverse().map((v, i) => (
+                                      <div key={i} className="text-xs text-white/40 bg-white/5 rounded-lg p-3 border border-white/10">
+                                        <span className="font-bold text-white/60">v{sub.versions.length - i}</span>
+                                        {' · '}
+                                        {new Date(v.submittedAt).toLocaleString()}
+                                        {v.textSubmission && (
+                                          <p className="mt-1 text-white/50 line-clamp-2">{v.textSubmission}</p>
+                                        )}
+                                      </div>
+                                    ))}
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+                          </motion.div>
+                        )}
+                      </AnimatePresence>
                     </div>
                   );
                 })}
@@ -441,17 +517,6 @@ function StudentDashboard() {
         </div>
       </div>
 
-      {/* SUBMISSION MODAL */}
-      <AnimatePresence>
-        {activeTask && (
-          <SubmissionForm
-            task={activeTask}
-            existingSubmission={getSubmission(activeTask._id)}
-            onClose={() => setActiveTask(null)}
-            onSuccess={handleSubmitSuccess}
-          />
-        )}
-      </AnimatePresence>
     </Layout>
   );
 }

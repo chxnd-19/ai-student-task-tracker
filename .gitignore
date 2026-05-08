@@ -4,6 +4,7 @@ dist/
 build/
 .vite/
 .cache/
+frontend/dist/
 
 # ── Python ────────────────────────────────────────────────────────────────────
 __pycache__/
@@ -14,6 +15,10 @@ __pycache__/
 .venv/
 venv/
 env/
+*.pyo
+.pytest_cache/
+.coverage
+htmlcov/
 
 # ── Environment (never commit secrets) ───────────────────────────────────────
 .env
@@ -40,3 +45,4 @@ backend/uploads/*
 
 # ── Scratch / temp ────────────────────────────────────────────────────────────
 scratch/
+backend/scratch/

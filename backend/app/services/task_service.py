@@ -60,7 +60,11 @@ async def get_tasks(user: dict, db: AsyncIOMotorDatabase, query_params: dict) ->
             )
             if not cls:
                 raise HTTPException(404, "Class not found or you are not a member.")
-            filt = {"classId": _oid(query_params["classId"])}
+            # Filter by classId AND assignedTo so the count matches the summary endpoint
+            filt = {
+                "classId":    _oid(query_params["classId"]),
+                "assignedTo": _oid(user["id"]),
+            }
         else:
             filt = {"assignedTo": _oid(user["id"])}
 
@@ -155,15 +159,37 @@ async def create_task(payload: TaskCreate, user: dict, db: AsyncIOMotorDatabase)
         f"title={doc['title']!r} by teacher={user['id']!r}"
     )
 
-    # Real-time activity + task_created event
-    from app.services.socket_service import emit_activity, emit_task_created
+    # Persist to activity log with structured metadata (this also emits "activity" socket event)
+    await log_activity(
+        db, user["id"], "task.create",
+        {
+            "taskTitle": doc["title"],
+            "className": cls.get("name") if class_id and cls else None,
+            "userName":  user.get("name", ""),
+        },
+        workspace_id=str(class_id) if class_id else None
+    )
+
+    # Create per-student activity entries so each student sees it in their feed
+    if assigned_to:
+        from app.services.activity_service import create_activity
+        class_name = cls.get("name") if class_id and cls else ""
+        for sid in assigned_to:
+            await create_activity(
+                db, sid,
+                "task_created",
+                f"New assignment '{doc['title']}' added{' in ' + class_name if class_name else ''}",
+                {
+                    "taskTitle": doc["title"],
+                    "taskId":    str(result.inserted_id),
+                    "className": class_name,
+                    "userName":  user.get("name", "Instructor"),
+                },
+            )
+
+    # Emit task_created event (separate from activity feed)
     if class_id:
-        await emit_activity(
-            str(class_id),
-            "created a new assignment",
-            user["name"],
-            {"taskTitle": doc["title"]}
-        )
+        from app.services.socket_service import emit_task_created
         await emit_task_created(str(class_id), serialize_doc(task))
 
     return serialize_doc(task)

@@ -24,6 +24,7 @@ async def _create_indexes(db: AsyncIOMotorDatabase) -> None:
         (db.users, [
             IndexModel([("email", ASCENDING)], unique=True),
             IndexModel([("role",  ASCENDING)]),
+            IndexModel([("profile.usn", ASCENDING)], unique=True, sparse=True),
         ]),
         (db.tasks, [
             IndexModel([("createdBy",  ASCENDING)]),
@@ -50,13 +51,12 @@ async def _create_indexes(db: AsyncIOMotorDatabase) -> None:
             IndexModel([("userId", ASCENDING), ("createdAt", DESCENDING)]),
             IndexModel([("userId", ASCENDING), ("isRead", ASCENDING)]),
         ]),
-        (db.profiles, [
-            IndexModel([("userId", ASCENDING)], unique=True),
-        ]),
         (db.activity_logs, [
             IndexModel([("userId",    ASCENDING)]),
-            IndexModel([("createdAt", DESCENDING)]),
+            IndexModel([("timestamp", DESCENDING)]),
             IndexModel([("action",    ASCENDING)]),
+            # Compound index for per-user feed queries (most common access pattern)
+            IndexModel([("userId", ASCENDING), ("timestamp", DESCENDING)]),
         ]),
     ]
     for collection, indexes in collections:
@@ -81,10 +81,18 @@ async def connect_db() -> None:
         )
         _db = _client[settings.DB_NAME]
         await _client.admin.command("ping")
-        print(f"✅ Database connected: {settings.DB_NAME}")
+
+        # ── Confirm which DB we're connected to ──────────────────────────────
+        masked_uri = settings.MONGO_URI
+        if "@" in masked_uri:
+            prefix, rest = masked_uri.split("@", 1)
+            scheme = prefix.split("://")[0]
+            masked_uri = f"{scheme}://***@{rest}"
+        logger.info(f"✅ Database connected: {settings.DB_NAME} ({masked_uri})")
+
         await _create_indexes(_db)
     except Exception as e:
-        print(f"⚠️  DB connection failed (app still starts): {e}")
+        logger.error(f"⚠️  DB connection failed (app still starts): {e}")
         _client = None
         _db = None
 
@@ -94,7 +102,7 @@ async def close_db() -> None:
     global _client
     if _client:
         _client.close()
-        print("[DB] Connection closed.")
+        logger.info("[DB] Connection closed.")
 
 
 def get_db() -> AsyncIOMotorDatabase:

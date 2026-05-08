@@ -1,18 +1,27 @@
 {
-  "name": "student-task-tracker",
+  "name": "scholar-os",
   "version": "1.0.0",
   "private": true,
   "scripts": {
     "prepare": "husky",
+
     "validate:api": "npm run validate:api --prefix frontend",
-    "release-check": "npm run validate:api"
+    "release-check": "npm run validate:api",
+
+    "backend": "cd backend && venv\\Scripts\\python.exe run.py",
+    "frontend": "cd frontend && npm run dev",
+
+    "dev": "concurrently \"npm run backend\" \"npm run frontend\""
   },
+
   "lint-staged": {
     "frontend/src/**/*.{js,jsx}": [
       "node frontend/scripts/validate-api.js"
     ]
   },
+
   "devDependencies": {
+    "concurrently": "^9.2.1",
     "husky": "^9.0.11",
     "lint-staged": "^15.2.2"
   }

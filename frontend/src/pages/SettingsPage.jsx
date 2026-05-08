@@ -32,7 +32,7 @@ function SettingsPage() {
         payload.password = form.newPassword;
       }
       
-      const res = await api.put("/api/profile", payload);
+      const res = await api.put("/api/settings", payload);
       const updatedUser = res.data.data;
       
       updateUser(updatedUser);

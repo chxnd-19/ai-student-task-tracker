@@ -1,7 +1,7 @@
 """
 Submission routes — /api/submissions
 """
-from fastapi import APIRouter, Depends, UploadFile, File, Form, BackgroundTasks
+from fastapi import APIRouter, Depends, UploadFile, File, Form, BackgroundTasks, Body
 from typing import Optional
 
 from app.services import submission_service, ai_service
@@ -123,4 +123,62 @@ async def get_student_analytics(user: dict = Depends(require_student)):
 async def get_reminders(user: dict = Depends(require_student)):
     db   = get_db()
     data = await submission_service.get_reminders(user, db)
+    return ok(data)
+
+
+@router.post(
+    "/{submission_id}/retry-grading",
+    summary="Retry AI grading for a failed submission (teacher only)",
+    description=(
+        "Re-triggers AI grading for a submission whose aiFeedback.status is 'failed'. "
+        "Clears the failed status so analyze_submission will run again. "
+        "Only the teacher who owns the task can trigger this."
+    ),
+    responses={
+        200: {"description": "Grading re-triggered"},
+        403: {"description": "Not authorised"},
+        404: {"description": "Submission not found"},
+        409: {"description": "Submission already graded — retry not needed"},
+    },
+)
+async def retry_grading(
+    submission_id:    str,
+    background_tasks: BackgroundTasks,
+    user:             dict = Depends(require_teacher),
+):
+    db  = get_db()
+    sub = await submission_service.reset_grading_status(submission_id, user, db)
+    background_tasks.add_task(ai_service.analyze_submission, submission_id, db)
+    return ok(sub)
+
+
+@router.put(
+    "/{submission_id}/grade",
+    summary="Override AI grade (teacher only)",
+    description=(
+        "Allows a teacher to override the AI-generated grade. "
+        "Updates `aiFeedback.score`, `aiFeedback.feedback`, and sets `graded_by = 'teacher'`. "
+        "The teacher must own the task the submission belongs to."
+    ),
+    responses={
+        200: {"description": "Updated submission with teacher grade"},
+        403: {"description": "Student role cannot grade submissions"},
+        404: {"description": "Submission not found or not owned by this teacher"},
+    },
+)
+async def grade_submission(
+    submission_id: str,
+    payload:       dict = Body(..., examples={
+        "override": {
+            "summary": "Teacher grade override",
+            "value": {
+                "score":    85,
+                "feedback": "Good work overall. The analysis was thorough.",
+            }
+        }
+    }),
+    user:          dict = Depends(require_teacher),
+):
+    db   = get_db()
+    data = await submission_service.override_grade(submission_id, payload, user, db)
     return ok(data)

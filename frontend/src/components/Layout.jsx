@@ -11,7 +11,8 @@ import {
   Search,
   Bell,
   ChevronRight,
-  Sparkles
+  Sparkles,
+  UserCircle
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useNavigate, useLocation } from 'react-router-dom';
@@ -24,6 +25,7 @@ const Sidebar = ({ isCollapsed, setIsCollapsed }) => {
   const navItems = [
     { icon: <LayoutDashboard size={20} />, label: 'Dashboard', path: '/dashboard' },
     { icon: <BookOpen size={20} />, label: 'Classes', path: '/classes' },
+    { icon: <UserCircle size={20} />, label: 'Profile', path: '/profile' },
     { icon: <Settings size={20} />, label: 'Settings', path: '/settings' },
   ];
 
@@ -52,7 +54,7 @@ const Sidebar = ({ isCollapsed, setIsCollapsed }) => {
             animate={{ opacity: 1, x: 0 }}
             className="text-xl font-black tracking-tight"
           >
-            Edu<span className="text-purple-500">Tracker</span>
+            Scholar<span className="text-purple-500">OS</span>
           </motion.span>
         )}
       </div>
@@ -248,11 +250,11 @@ const TopBar = ({ user, logout }) => {
                   <button
                     onClick={() => {
                       setShowProfile(false);
-                      navigate('/settings');
+                      navigate('/profile');
                     }}
                     className="w-full px-4 py-3 text-left text-sm hover:bg-white/5 transition-colors flex items-center gap-3"
                   >
-                    <Settings size={16} />
+                    <UserCircle size={16} />
                     Profile
                   </button>
                   <button

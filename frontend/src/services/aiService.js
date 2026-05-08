@@ -22,8 +22,8 @@ export const getPriority = async (classId = null) => {
 
 /**
  * getPlan — fetch the AI-generated daily study plan.
+ * Response shape: { success, data: { generated_at: ISO string, plan: [...] } }
  * @param {string|null} classId
- * @returns {Promise<{ data: Array<{ task_id, title, subject, ai_score, start, end }> }>}
  */
 export const getPlan = async (classId = null) => {
   const res = await api.get(`${BASE}/plan`, {
